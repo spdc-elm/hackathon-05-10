@@ -21,35 +21,35 @@ export function NodeDetailPanel() {
 
       {nodeDetail && !nodeDetailLoading && (
         <div className="detail-body">
-          <div className="detail-section">
-            <span className="detail-label">Category</span>
+          {/* Metadata strip */}
+          <div className="detail-meta-strip">
             <span className="detail-badge">{nodeDetail.node.category}</span>
+            {nodeDetail.node.textbook_id && (
+              <span className="detail-meta-tag">{nodeDetail.node.textbook_id}</span>
+            )}
+            {nodeDetail.node.chapter_id && (
+              <span className="detail-meta-tag">{nodeDetail.node.chapter_id}</span>
+            )}
+            <span className="detail-meta-tag confidence-tag">
+              {Math.round(nodeDetail.node.confidence * 100)}%
+            </span>
           </div>
 
+          {/* Aliases */}
           {nodeDetail.node.aliases.length > 0 && (
-            <div className="detail-section">
-              <span className="detail-label">Aliases</span>
-              <div className="detail-aliases">
-                {nodeDetail.node.aliases.map((a) => (
-                  <span key={a} className="alias-tag">{a}</span>
-                ))}
-              </div>
+            <div className="detail-aliases">
+              {nodeDetail.node.aliases.map((a) => (
+                <span key={a} className="alias-tag">{a}</span>
+              ))}
             </div>
           )}
 
-          <div className="detail-section detail-markdown">
+          {/* Full markdown content */}
+          <div className="detail-markdown-full">
             <MarkdownViewer
               content={nodeDetail.content_md}
               onLinkClick={(target) => setSelectedNodeName(target)}
             />
-          </div>
-
-          <div className="detail-section">
-            <span className="detail-label">Confidence</span>
-            <div className="confidence-bar">
-              <div className="confidence-fill" style={{ width: `${nodeDetail.node.confidence * 100}%` }} />
-              <span className="confidence-value">{Math.round(nodeDetail.node.confidence * 100)}%</span>
-            </div>
           </div>
         </div>
       )}

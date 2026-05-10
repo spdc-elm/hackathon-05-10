@@ -167,7 +167,7 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: 340px;
+  width: 420px;
   height: 100%;
   background: var(--surface);
   border-left: 1px solid var(--line);
@@ -226,7 +226,34 @@
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+}
+
+.detail-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.detail-meta-tag {
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--quiet);
+  font-family: monospace;
+}
+
+.confidence-tag {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.detail-markdown-full {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
 }
 
 .detail-section {
