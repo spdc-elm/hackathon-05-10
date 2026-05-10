@@ -235,14 +235,38 @@ function ExtractionBadge({ status }: { status: string }) {
 
 function DocumentPreview({ doc }: { doc: DocumentMeta | null }) {
   const [detail, setDetail] = useState<any>(null);
+  const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
+  const [chapterContent, setChapterContent] = useState<string>("");
+  const [loadingContent, setLoadingContent] = useState(false);
 
   useEffect(() => {
+    setExpandedChapter(null);
+    setChapterContent("");
     if (!doc) { setDetail(null); return; }
     fetch(`/api/documents/${doc.document_id}`)
       .then((r) => r.json())
       .then(setDetail)
       .catch(() => setDetail(null));
   }, [doc]);
+
+  function toggleChapter(chapterId: string, title: string) {
+    if (expandedChapter === chapterId) {
+      setExpandedChapter(null);
+      setChapterContent("");
+      return;
+    }
+    setExpandedChapter(chapterId);
+    setLoadingContent(true);
+    // Read chapter from vault
+    const safeTitle = (doc!.title || doc!.filename).replace(/\//g, "_").replace(/\\/g, "_");
+    const safeCh = title.replace(/\//g, "_").replace(/\\/g, "_").replace(/ /g, "-");
+    const path = `textbooks/${safeTitle}/${safeCh}.md`;
+    fetch(`/api/vault/pages/${path}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => setChapterContent(data.content_md || ""))
+      .catch(() => setChapterContent("(content not available)"))
+      .finally(() => setLoadingContent(false));
+  }
 
   if (!doc) {
     return (
@@ -263,12 +287,27 @@ function DocumentPreview({ doc }: { doc: DocumentMeta | null }) {
       {detail?.chapters && (
         <div className="ws-chapter-list">
           {detail.chapters.map((ch: any) => (
-            <div key={ch.chapter_id} className="ws-chapter-item">
-              <span className="ws-ch-title">{ch.title}</span>
-              <span className="ws-ch-meta">
-                {ch.char_count.toLocaleString()} chars
-                {ch.page_start && ` · p.${ch.page_start}${ch.page_end && ch.page_end !== ch.page_start ? `–${ch.page_end}` : ""}`}
-              </span>
+            <div key={ch.chapter_id} className="ws-chapter-group">
+              <div
+                className={`ws-chapter-item ${expandedChapter === ch.chapter_id ? "expanded" : ""}`}
+                onClick={() => toggleChapter(ch.chapter_id, ch.title)}
+              >
+                <span className="ws-ch-expand">{expandedChapter === ch.chapter_id ? "▼" : "▶"}</span>
+                <span className="ws-ch-title">{ch.title}</span>
+                <span className="ws-ch-meta">
+                  {ch.char_count.toLocaleString()} chars
+                  {ch.page_start && ` · p.${ch.page_start}${ch.page_end && ch.page_end !== ch.page_start ? `–${ch.page_end}` : ""}`}
+                </span>
+              </div>
+              {expandedChapter === ch.chapter_id && (
+                <div className="ws-chapter-content">
+                  {loadingContent ? (
+                    <span className="ws-ch-loading">Loading...</span>
+                  ) : (
+                    <pre>{chapterContent}</pre>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

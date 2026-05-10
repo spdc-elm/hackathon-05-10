@@ -645,21 +645,75 @@ h2 {
   gap: 2px;
 }
 
+.ws-chapter-group {
+  display: flex;
+  flex-direction: column;
+}
+
 .ws-chapter-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 8px 12px;
   border-radius: 4px;
   background: var(--surface);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.ws-chapter-item:hover {
+  background: var(--surface-soft);
+}
+
+.ws-chapter-item.expanded {
+  background: var(--surface-soft);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.ws-ch-expand {
+  font-size: 10px;
+  color: var(--quiet);
+  flex-shrink: 0;
+  width: 12px;
 }
 
 .ws-ch-title {
   font-size: 13px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ws-ch-meta {
   font-size: 11px;
   color: var(--quiet);
   flex-shrink: 0;
+}
+
+.ws-chapter-content {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  padding: 12px 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.ws-chapter-content pre {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+
+.ws-ch-loading {
+  color: var(--quiet);
+  font-size: 12px;
+  font-style: italic;
 }
