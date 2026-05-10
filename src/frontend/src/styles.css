@@ -1,0 +1,381 @@
+:root {
+  color-scheme: dark;
+  --bg: #0d0f0d;
+  --surface: #151815;
+  --surface-soft: #1b201b;
+  --line: #30382f;
+  --text: #e9ece5;
+  --muted: #9da697;
+  --quiet: #687264;
+  --accent: #c7d36f;
+  --accent-strong: #e0c16a;
+  --danger: #e08a6a;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 58px;
+}
+
+.eyebrow {
+  margin: 0 0 2px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+h1 {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-button,
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.file-button input {
+  display: none;
+}
+
+.ghost-button {
+  color: var(--muted);
+}
+
+.file-button:hover,
+.ghost-button:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.error {
+  border: 1px solid rgba(224, 138, 106, 0.6);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #ffd4c7;
+  background: rgba(224, 138, 106, 0.12);
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.summary div {
+  min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid var(--line);
+}
+
+.summary div:last-child {
+  border-right: 0;
+}
+
+.summary span,
+.pane-header span,
+.chapter-meta,
+.asset-strip {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.summary strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.8fr) minmax(360px, 1.4fr) minmax(320px, 1fr);
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+
+.pane {
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chapter-list,
+.chapter-detail,
+.raw-json {
+  display: flex;
+  flex-direction: column;
+}
+
+.chapter-scroll {
+  overflow: auto;
+  min-height: 0;
+}
+
+.chapter-row {
+  display: block;
+  width: 100%;
+  min-height: 66px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chapter-row:hover {
+  background: #20261f;
+}
+
+.chapter-row.selected {
+  background: #252b22;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.chapter-title {
+  display: block;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+.chapter-meta {
+  display: block;
+}
+
+.content-preview,
+.raw-json pre {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #dce2d5;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.raw-json pre {
+  color: #cfd8c8;
+}
+
+.asset-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: #111410;
+}
+
+.asset-strip span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Upload zone */
+.upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 320px;
+  border: 2px dashed var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--surface-soft);
+}
+
+.upload-zone.uploading {
+  cursor: default;
+  border-color: var(--accent);
+}
+
+.upload-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.upload-label {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--text);
+}
+
+.upload-hint {
+  font-size: 13px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.upload-progress p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #111;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.upload-btn:hover {
+  background: var(--accent-strong);
+}
+
+@media (max-width: 980px) {
+  .workspace {
+    padding: 12px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .summary {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  .summary div {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pane {
+    min-height: 360px;
+  }
+}

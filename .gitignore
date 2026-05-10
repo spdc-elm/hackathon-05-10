@@ -1,0 +1,48 @@
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.tsbuildinfo
+.venv/
+venv/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.next/
+.vite/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Contest and local data
+*.pdf
+*.zip
+samples/textbooks/
+samples/generated/
+experiments/**/outputs/
+experiments/**/generated/
+
+# Runtime indexes / caches
+data/
+src/backend/data/
+*.sqlite
+*.sqlite3
+*.db
+*.faiss
+*.pkl
+*.pickle
+
+# Logs
+*.log
+logs/
