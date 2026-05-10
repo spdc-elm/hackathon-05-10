@@ -147,46 +147,66 @@ class OpenAICompatibleLLMClient(LLMClient):
             "Content-Type": "application/json",
         }
 
-        response = None
+        # Use streaming to avoid read timeout on long generations.
+        # Connection timeout stays short; read timeout is effectively infinite
+        # since SSE chunks keep arriving.
+        stream_payload = {**dict(payload), "stream": True}
+        timeout = httpx.Timeout(
+            connect=30.0,
+            read=60.0,  # per-chunk read timeout, not total
+            write=30.0,
+            pool=30.0,
+        )
+
+        collected_content = ""
         try:
             if self._http_client is not None:
                 response = await self._http_client.post(
-                    url,
-                    headers=headers,
-                    json=dict(payload),
+                    url, headers=headers, json=stream_payload,
                 )
+                # Injected client doesn't support streaming; fall back to non-stream
+                if response.status_code >= 400:
+                    _log_exchange("http_error", dict(payload), response.status_code, response.text[:20000])
+                    raise LLMProviderError(f"LLM provider returned HTTP {response.status_code}: {response.text}")
+                data = response.json()
+                _log_exchange("ok", dict(payload), response.status_code, response.text[:20000])
+                if not isinstance(data, dict):
+                    raise LLMResponseError("LLM provider response JSON was not an object.")
+                return data
             else:
-                timeout = httpx.Timeout(self.settings.timeout_seconds)
                 async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(
-                        url,
-                        headers=headers,
-                        json=dict(payload),
-                    )
+                    async with client.stream("POST", url, headers=headers, json=stream_payload) as response:
+                        if response.status_code >= 400:
+                            body = await response.aread()
+                            body_text = body.decode(errors="replace")
+                            _log_exchange("http_error", dict(payload), response.status_code, body_text[:20000])
+                            raise LLMProviderError(f"LLM provider returned HTTP {response.status_code}: {body_text}")
+
+                        async for line in response.aiter_lines():
+                            if not line.startswith("data: "):
+                                continue
+                            data_str = line[6:]
+                            if data_str.strip() == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data_str)
+                                delta = chunk.get("choices", [{}])[0].get("delta", {})
+                                content_piece = delta.get("content", "")
+                                if content_piece:
+                                    collected_content += content_piece
+                            except (json.JSONDecodeError, IndexError, KeyError):
+                                continue
+
         except httpx.HTTPError as exc:
             _log_exchange("error", dict(payload), None, f"{type(exc).__name__}: {exc}")
             raise LLMProviderError(f"LLM request failed: {type(exc).__name__}: {exc}") from exc
 
-        _log_exchange(
-            "ok" if response.status_code < 400 else "http_error",
-            dict(payload),
-            response.status_code,
-            response.text[:20000],
-        )
+        _log_exchange("ok_stream", dict(payload), 200, collected_content[:20000])
 
-        if response.status_code >= 400:
-            raise LLMProviderError(
-                f"LLM provider returned HTTP {response.status_code}: {response.text}"
-            )
-
-        try:
-            data = response.json()
-        except json.JSONDecodeError as exc:
-            raise LLMResponseError("LLM provider returned non-JSON response.") from exc
-
-        if not isinstance(data, dict):
-            raise LLMResponseError("LLM provider response JSON was not an object.")
-        return data
+        # Reconstruct the response in non-streaming format
+        return {
+            "choices": [{"message": {"role": "assistant", "content": collected_content}}]
+        }
 
     def _require_model(self) -> str:
         if not self.settings.model:

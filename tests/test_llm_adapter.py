@@ -51,6 +51,7 @@ async def test_openai_compatible_request_construction() -> None:
             {"role": "user", "content": "Say hi"},
         ],
         "temperature": 0.4,
+        "stream": True,
     }
 
 
