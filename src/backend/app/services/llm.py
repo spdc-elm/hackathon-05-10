@@ -164,8 +164,8 @@ class OpenAICompatibleLLMClient(LLMClient):
                         json=dict(payload),
                     )
         except httpx.HTTPError as exc:
-            _log_exchange("error", dict(payload), None, str(exc))
-            raise LLMProviderError(f"LLM request failed: {exc}") from exc
+            _log_exchange("error", dict(payload), None, f"{type(exc).__name__}: {exc}")
+            raise LLMProviderError(f"LLM request failed: {type(exc).__name__}: {exc}") from exc
 
         _log_exchange(
             "ok" if response.status_code < 400 else "http_error",
