@@ -6,6 +6,7 @@ import type {
   VaultPageDetail,
   MergeDecisionDetail,
   MergeDecisionFilter,
+  MergeExecutePayload,
   MergeDecisionSummary,
 } from "../types/graph";
 
@@ -103,6 +104,14 @@ export async function fetchMergeDecisions(status: MergeDecisionFilter = "candida
 
 export async function fetchMergeDecisionDetail(decisionId: string): Promise<MergeDecisionDetail> {
   return apiFetch(`/api/merge/decisions/${encodeURIComponent(decisionId)}`);
+}
+
+export async function executeMergeDecision(payload: MergeExecutePayload): Promise<MergeDecisionSummary> {
+  return apiFetch("/api/merge/execute", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 // --- Vault ---

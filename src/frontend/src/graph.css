@@ -494,9 +494,18 @@
 
 .merge-filter-row {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 6px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
+}
+
+.merge-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
 
 .merge-filter {
@@ -517,6 +526,40 @@
 
 .merge-filter.active {
   background: rgba(199, 211, 111, 0.1);
+}
+
+.merge-apply-button {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid rgba(199, 211, 111, 0.38);
+  border-radius: 5px;
+  background: rgba(199, 211, 111, 0.08);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.merge-apply-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(199, 211, 111, 0.14);
+  color: var(--text);
+}
+
+.merge-apply-button:disabled {
+  opacity: 0.52;
+  cursor: default;
+}
+
+.merge-apply-button.primary {
+  flex-shrink: 0;
+}
+
+.merge-apply-button.compact {
+  min-height: 24px;
+  padding: 3px 8px;
+  font-size: 11px;
 }
 
 .merge-error {
@@ -561,6 +604,11 @@
 .merge-row:hover,
 .merge-row.selected {
   background: var(--surface-soft);
+}
+
+.merge-row:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .merge-row.selected {
@@ -612,6 +660,14 @@
   line-height: 1.35;
 }
 
+.merge-row-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .merge-status {
   flex-shrink: 0;
   padding: 2px 6px;
@@ -653,6 +709,12 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 14px;
+}
+
+.merge-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 12px;
 }
 
 .merge-meta-item {

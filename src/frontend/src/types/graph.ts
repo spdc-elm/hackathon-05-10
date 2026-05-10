@@ -92,6 +92,14 @@ export type MergeDecisionDetail = {
   wikilinks: string[];
 };
 
+export type MergeExecutePayload = {
+  decision_id: string;
+  affected_nodes: string[];
+  result_name: string;
+  frontmatter: Record<string, unknown>;
+  body: string;
+};
+
 export type SearchMatch = {
   name: string;
   match_field: string;
