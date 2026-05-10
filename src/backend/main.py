@@ -69,6 +69,19 @@ def health() -> dict[str, str]:
 # --- Document Upload & Management ---
 
 
+@app.post("/api/parse/upload")
+async def parse_upload(
+    file: UploadFile,
+    repo: RuntimeRepository = Depends(get_runtime_repository),
+    vault: VaultService = Depends(get_vault_service),
+) -> dict[str, Any]:
+    """Upload and parse, returning the full ParsedDocument (for upload page preview)."""
+    document, _meta = await _parse_and_register_upload(file, repo)
+    writer = ConceptWriter(vault)
+    writer.write_textbook_chapters(document)
+    return document.to_dict()
+
+
 @app.post("/api/documents/upload")
 async def upload_document(
     file: UploadFile,

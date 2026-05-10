@@ -1,23 +1,17 @@
 import { useGraphContext } from "../context/GraphContext";
-import type { ViewMode } from "../types/graph";
 
 type Props = {
   onBack: () => void;
 };
 
 export function GraphToolbar({ onBack }: Props) {
-  const { searchQuery, setSearchQuery, viewMode, setViewMode, loadGraph, loading } = useGraphContext();
-
-  function handleModeChange(mode: ViewMode) {
-    setViewMode(mode);
-    setTimeout(loadGraph, 0);
-  }
+  const { searchQuery, setSearchQuery, loadGraph, loading } = useGraphContext();
 
   return (
     <header className="graph-toolbar">
       <div className="graph-toolbar-left">
         <button className="ghost-button" type="button" onClick={onBack}>
-          &larr; Documents
+          &larr; Upload
         </button>
         <h2>Knowledge Graph</h2>
       </div>
@@ -27,7 +21,7 @@ export function GraphToolbar({ onBack }: Props) {
           <input
             type="text"
             className="search-input"
-            placeholder="Search nodes..."
+            placeholder="Search concepts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -40,24 +34,14 @@ export function GraphToolbar({ onBack }: Props) {
       </div>
 
       <div className="graph-toolbar-right">
-        <div className="mode-toggle">
-          <button
-            className={`mode-btn ${viewMode === "per_document" ? "active" : ""}`}
-            type="button"
-            onClick={() => handleModeChange("per_document")}
-            disabled={loading}
-          >
-            Per Document
-          </button>
-          <button
-            className={`mode-btn ${viewMode === "frequency_preview" ? "active" : ""}`}
-            type="button"
-            onClick={() => handleModeChange("frequency_preview")}
-            disabled={loading}
-          >
-            Frequency
-          </button>
-        </div>
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={loadGraph}
+          disabled={loading}
+        >
+          {loading ? "Loading..." : "Refresh"}
+        </button>
       </div>
     </header>
   );

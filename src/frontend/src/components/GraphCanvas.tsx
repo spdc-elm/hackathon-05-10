@@ -2,13 +2,27 @@ import { useEffect, useRef } from "react";
 import cytoscape from "cytoscape";
 import fcose from "cytoscape-fcose";
 import { useGraphContext } from "../context/GraphContext";
-import { DOCUMENT_COLORS, RELATION_COLORS } from "../mocks/graphViewMock";
 import type { GraphView } from "../types/graph";
 
 cytoscape.use(fcose);
 
+const CATEGORY_COLORS: Record<string, string> = {
+  "核心概念": "#7ecb9a",
+  "方法": "#6ab0d4",
+  "结构": "#d4a06a",
+  "过程": "#c47ed4",
+  "物质": "#d47e7e",
+};
+
+const RELATION_COLORS: Record<string, string> = {
+  prerequisite: "#e8a838",
+  contains: "#38b2e8",
+  parallel: "#8ce838",
+  applies_to: "#e838b2",
+};
+
 function resolveColor(colorKey: string): string {
-  return DOCUMENT_COLORS[colorKey] ?? RELATION_COLORS[colorKey] ?? "#9da697";
+  return CATEGORY_COLORS[colorKey] ?? RELATION_COLORS[colorKey] ?? "#9da697";
 }
 
 function buildElements(view: GraphView): cytoscape.ElementDefinition[] {
@@ -19,7 +33,6 @@ function buildElements(view: GraphView): cytoscape.ElementDefinition[] {
       label: n.label,
       size: n.size,
       color: resolveColor(n.color_key),
-      sourceCount: n.source_count,
       category: n.category,
     },
   }));
@@ -32,7 +45,6 @@ function buildElements(view: GraphView): cytoscape.ElementDefinition[] {
       target: e.target,
       label: e.label,
       color: resolveColor(e.color_key),
-      relationType: e.relation_type,
     },
   }));
 
@@ -115,10 +127,13 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
 export function GraphCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
-  const { graphView, setSelectedNodeId, searchMatches, selectedNodeId } = useGraphContext();
+  const { graphView, setSelectedNodeName, searchMatches, selectedNodeName } = useGraphContext();
 
-  const setSelectedNodeIdRef = useRef(setSelectedNodeId);
-  setSelectedNodeIdRef.current = setSelectedNodeId;
+  const setSelectedRef = useRef(setSelectedNodeName);
+  setSelectedRef.current = setSelectedNodeName;
+
+  const graphViewRef = useRef(graphView);
+  graphViewRef.current = graphView;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -134,12 +149,17 @@ export function GraphCanvas() {
     });
 
     cy.on("tap", "node", (evt) => {
-      setSelectedNodeIdRef.current(evt.target.id());
+      const nodeId = evt.target.id();
+      const view = graphViewRef.current;
+      if (view) {
+        const found = view.nodes.find((n) => n.id === nodeId);
+        setSelectedRef.current(found?.label ?? nodeId);
+      }
     });
 
     cy.on("tap", (evt) => {
       if (evt.target === cy) {
-        setSelectedNodeIdRef.current(null);
+        setSelectedRef.current(null);
       }
     });
 
@@ -148,7 +168,7 @@ export function GraphCanvas() {
       cy.destroy();
       cyRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -177,18 +197,18 @@ export function GraphCanvas() {
     cy.edges().removeClass("faded");
 
     if (searchMatches.length > 0) {
-      const matchIds = new Set(searchMatches.map((m) => m.node_id));
+      const matchNames = new Set(searchMatches.map((m) => m.name));
       cy.nodes().forEach((node) => {
-        if (matchIds.has(node.id())) {
+        if (matchNames.has(node.data("label"))) {
           node.addClass("highlighted");
         } else {
           node.addClass("faded");
         }
       });
       cy.edges().forEach((edge) => {
-        const src = edge.source().id();
-        const tgt = edge.target().id();
-        if (!matchIds.has(src) && !matchIds.has(tgt)) {
+        const src = edge.source();
+        const tgt = edge.target();
+        if (!matchNames.has(src.data("label")) && !matchNames.has(tgt.data("label"))) {
           edge.addClass("faded");
         }
       });
@@ -197,17 +217,20 @@ export function GraphCanvas() {
 
   useEffect(() => {
     const cy = cyRef.current;
-    if (!cy) return;
+    if (!cy || !graphView) return;
 
     cy.nodes().unselect();
-    if (selectedNodeId) {
-      const node = cy.getElementById(selectedNodeId);
-      if (node.length) {
-        node.select();
-        cy.animate({ center: { eles: node }, duration: 300 });
+    if (selectedNodeName) {
+      const found = graphView.nodes.find((n) => n.label === selectedNodeName);
+      if (found) {
+        const node = cy.getElementById(found.id);
+        if (node.length) {
+          node.select();
+          cy.animate({ center: { eles: node }, duration: 300 });
+        }
       }
     }
-  }, [selectedNodeId]);
+  }, [selectedNodeName, graphView]);
 
   return <div ref={containerRef} className="graph-canvas" />;
 }

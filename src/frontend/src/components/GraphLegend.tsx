@@ -1,5 +1,11 @@
 import { useGraphContext } from "../context/GraphContext";
-import { DOCUMENT_COLORS, RELATION_COLORS } from "../mocks/graphViewMock";
+
+const RELATION_COLORS: Record<string, string> = {
+  prerequisite: "#e8a838",
+  contains: "#38b2e8",
+  parallel: "#8ce838",
+  applies_to: "#e838b2",
+};
 
 export function GraphLegend() {
   const { graphView } = useGraphContext();
@@ -12,7 +18,7 @@ export function GraphLegend() {
         <span className="legend-title">Documents</span>
         {graphView.legend.documents.map((doc) => (
           <span key={doc.document_id} className="legend-item">
-            <span className="legend-dot" style={{ background: DOCUMENT_COLORS[doc.color_key] ?? "#9da697" }} />
+            <span className="legend-dot" style={{ background: "#7ecb9a" }} />
             {doc.title}
           </span>
         ))}

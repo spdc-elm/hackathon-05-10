@@ -1,14 +1,14 @@
 import { useGraphContext } from "../context/GraphContext";
-import { DOCUMENT_COLORS } from "../mocks/graphViewMock";
+import { MarkdownViewer } from "./MarkdownViewer";
 
 export function NodeDetailPanel() {
-  const { selectedNodeId, nodeDetail, nodeDetailLoading, setSelectedNodeId } = useGraphContext();
+  const { selectedNodeName, nodeDetail, nodeDetailLoading, setSelectedNodeName } = useGraphContext();
 
   return (
-    <aside className={`detail-panel ${selectedNodeId ? "open" : ""}`}>
+    <aside className={`detail-panel ${selectedNodeName ? "open" : ""}`}>
       <div className="detail-panel-header">
         <h3>{nodeDetail?.node.name ?? "Loading..."}</h3>
-        <button className="detail-close" type="button" onClick={() => setSelectedNodeId(null)}>
+        <button className="detail-close" type="button" onClick={() => setSelectedNodeName(null)}>
           &times;
         </button>
       </div>
@@ -26,11 +26,6 @@ export function NodeDetailPanel() {
             <span className="detail-badge">{nodeDetail.node.category}</span>
           </div>
 
-          <div className="detail-section">
-            <span className="detail-label">Definition</span>
-            <p className="detail-text">{nodeDetail.node.definition}</p>
-          </div>
-
           {nodeDetail.node.aliases.length > 0 && (
             <div className="detail-section">
               <span className="detail-label">Aliases</span>
@@ -42,21 +37,11 @@ export function NodeDetailPanel() {
             </div>
           )}
 
-          <div className="detail-section">
-            <span className="detail-label">Source</span>
-            <div className="detail-source">
-              <span
-                className="source-dot"
-                style={{ background: DOCUMENT_COLORS[nodeDetail.node.textbook_id] ?? "#9da697" }}
-              />
-              <span>{nodeDetail.chapter.title}</span>
-              {nodeDetail.node.page_start && <span className="detail-muted"> p.{nodeDetail.node.page_start}</span>}
-            </div>
-          </div>
-
-          <div className="detail-section">
-            <span className="detail-label">Evidence</span>
-            <blockquote className="detail-evidence">{nodeDetail.node.evidence}</blockquote>
+          <div className="detail-section detail-markdown">
+            <MarkdownViewer
+              content={nodeDetail.content_md}
+              onLinkClick={(target) => setSelectedNodeName(target)}
+            />
           </div>
 
           <div className="detail-section">
