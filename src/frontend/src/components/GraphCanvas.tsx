@@ -143,9 +143,9 @@ export function GraphCanvas() {
       style: cytoscapeStyle,
       layout: { name: "grid" },
       elements: [],
-      minZoom: 0.3,
-      maxZoom: 4,
-      wheelSensitivity: 0.3,
+      minZoom: 0.2,
+      maxZoom: 5,
+      wheelSensitivity: 1,
     });
 
     cy.on("tap", "node", (evt) => {
@@ -226,7 +226,6 @@ export function GraphCanvas() {
         const node = cy.getElementById(found.id);
         if (node.length) {
           node.select();
-          cy.animate({ center: { eles: node }, duration: 300 });
         }
       }
     }

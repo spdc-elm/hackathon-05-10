@@ -30,9 +30,6 @@ export function NodeDetailPanel() {
             {nodeDetail.node.chapter_id && (
               <span className="detail-meta-tag">{nodeDetail.node.chapter_id}</span>
             )}
-            <span className="detail-meta-tag confidence-tag">
-              {Math.round(nodeDetail.node.confidence * 100)}%
-            </span>
           </div>
 
           {/* Aliases */}
