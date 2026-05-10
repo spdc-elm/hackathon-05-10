@@ -1,13 +1,35 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import httpx
 
 from app.core.config import LLMSettings, get_settings
+
+
+def _log_dir() -> Path:
+    d = Path(os.getenv("RUNTIME_DIR", "data/runtime")) / "llm_logs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _log_exchange(label: str, request_payload: Any, response_status: int | None, response_body: str) -> None:
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    log_file = _log_dir() / f"{ts}_{label}.json"
+    entry = {
+        "timestamp": ts,
+        "label": label,
+        "request": request_payload,
+        "response_status": response_status,
+        "response_body": response_body[:20000],
+    }
+    log_file.write_text(json.dumps(entry, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 class LLMError(Exception):
@@ -125,6 +147,7 @@ class OpenAICompatibleLLMClient(LLMClient):
             "Content-Type": "application/json",
         }
 
+        response = None
         try:
             if self._http_client is not None:
                 response = await self._http_client.post(
@@ -141,7 +164,15 @@ class OpenAICompatibleLLMClient(LLMClient):
                         json=dict(payload),
                     )
         except httpx.HTTPError as exc:
+            _log_exchange("error", dict(payload), None, str(exc))
             raise LLMProviderError(f"LLM request failed: {exc}") from exc
+
+        _log_exchange(
+            "ok" if response.status_code < 400 else "http_error",
+            dict(payload),
+            response.status_code,
+            response.text[:20000],
+        )
 
         if response.status_code >= 400:
             raise LLMProviderError(
