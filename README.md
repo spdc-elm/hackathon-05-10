@@ -80,6 +80,36 @@ cd src/frontend
 npm run dev
 ```
 
+## Docker / ModelScope 创空间
+
+仓库根目录提供 `Dockerfile`，会先构建 Vite 前端，再由 FastAPI 托管静态页面与 `/api/*` 接口。容器默认监听 `7860`：
+
+```bash
+docker build -t hackathon-05-10 .
+docker run --rm -p 7860:7860 \
+  -e LLM_PROVIDER=openai_compatible \
+  -e LLM_BASE_URL=https://your-compatible-endpoint/v1 \
+  -e LLM_API_KEY=your-key \
+  -e LLM_MODEL=your-model \
+  hackathon-05-10
+```
+
+ModelScope 创空间环境变量建议配置：
+
+```env
+PORT=7860
+LLM_PROVIDER=openai_compatible
+LLM_BASE_URL=https://your-compatible-endpoint/v1
+LLM_API_KEY=your-key
+LLM_MODEL=your-model
+LLM_TEMPERATURE=0.2
+LLM_TIMEOUT_SECONDS=180
+RUNTIME_DIR=/data/runtime
+VAULT_DIR=/data/vault
+```
+
+不要把 `LLM_API_KEY` 或 ModelScope Git token 写入代码、README、Dockerfile 或 `.env` 后提交。
+
 ## 使用流程
 
 1. 打开前端页面。

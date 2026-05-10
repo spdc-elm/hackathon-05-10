@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import get_settings
 from app.parsers import MarkdownParser, PdfParser
@@ -501,3 +502,12 @@ def _concept_belongs_to_document(frontmatter: dict[str, Any], document_id: str) 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _mount_static_frontend() -> None:
+    static_dir = Path(__file__).resolve().parent / "static"
+    if static_dir.exists():
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
+
+_mount_static_frontend()
