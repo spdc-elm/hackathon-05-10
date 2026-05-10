@@ -4,6 +4,7 @@ import { useGraphContext } from "../context/GraphContext";
 import { GraphCanvas } from "./GraphCanvas";
 import { GraphLegend } from "./GraphLegend";
 import { NodeDetailPanel } from "./NodeDetailPanel";
+import { MergeDecisionPanel } from "./MergeDecisionPanel";
 
 type ViewMode = "graph" | "documents";
 
@@ -14,7 +15,7 @@ export function Workspace() {
   const [viewMode, setViewMode] = useState<ViewMode>("graph");
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { loadGraph, searchQuery, setSearchQuery, loading } = useGraphContext();
+  const { loadGraph, searchQuery, setSearchQuery, loading, scanMerges, mergeDecisionLoading } = useGraphContext();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshDocuments = useCallback(async () => {
@@ -206,6 +207,14 @@ export function Workspace() {
               <button
                 className="ghost-button"
                 type="button"
+                onClick={scanMerges}
+                disabled={mergeDecisionLoading}
+              >
+                {mergeDecisionLoading ? "..." : "Scan merges"}
+              </button>
+              <button
+                className="ghost-button"
+                type="button"
                 onClick={loadGraph}
                 disabled={loading}
               >
@@ -214,6 +223,7 @@ export function Workspace() {
             </header>
             <div className="ws-graph-canvas-area">
               <GraphCanvas />
+              <MergeDecisionPanel />
               <NodeDetailPanel />
             </div>
             <GraphLegend />

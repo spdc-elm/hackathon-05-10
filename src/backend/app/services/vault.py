@@ -42,6 +42,8 @@ class VaultService:
     def ensure_structure(self) -> None:
         (self.root / "textbooks").mkdir(parents=True, exist_ok=True)
         (self.root / "concepts").mkdir(parents=True, exist_ok=True)
+        (self.root / "decisions" / "merge").mkdir(parents=True, exist_ok=True)
+        (self.root / "archive" / "concepts").mkdir(parents=True, exist_ok=True)
 
     def list_pages(self, subdir: str | None = None) -> list[VaultPageSummary]:
         base = self.root / subdir if subdir else self.root
@@ -52,7 +54,7 @@ class VaultService:
         for md_file in sorted(base.rglob("*.md")):
             relative = str(md_file.relative_to(self.root))
             fm, _ = self._parse_frontmatter(md_file.read_text(encoding="utf-8"))
-            title = fm.get("title") or md_file.stem
+            title = fm.get("title") or fm.get("canonical_name") or md_file.stem
             category = fm.get("category", "")
             pages.append(VaultPageSummary(path=relative, title=title, category=category))
         return pages
@@ -117,7 +119,12 @@ class VaultService:
         return fm if isinstance(fm, dict) else {}, body
 
     def _extract_wikilinks(self, text: str) -> list[str]:
-        return list(dict.fromkeys(WIKILINK_RE.findall(text)))
+        links: list[str] = []
+        for raw_link in WIKILINK_RE.findall(text):
+            target = raw_link.split("|", 1)[0].strip()
+            if target:
+                links.append(target)
+        return list(dict.fromkeys(links))
 
     def _render_page(self, frontmatter: dict[str, Any], body: str) -> str:
         yaml_text = yaml.dump(

@@ -34,10 +34,12 @@ PDF upload → PyMuPDF parse → ParsedDocument (JSON)
                                     ↓
                           LLM extraction per chapter
                                     ↓
-                    Concepts as MD files in data/vault/concepts/
+                    Concepts as active MD files in data/vault/concepts/
                     (YAML frontmatter + [[wikilinks]])
                                     ↓
-                    Graph = scan all [[links]] across vault
+                    Merge candidates/decisions in data/vault/decisions/merge/
+                                    ↓
+                    Graph = scan active concept [[links]] only
                                     ↓
                     Frontend: Cytoscape graph + MD page viewer
 ```
@@ -87,11 +89,12 @@ pytest tests/ -v
 
 ## Key Design Decisions
 
-1. Graph is ephemeral: derived on-demand from vault scan, never stored separately
-2. Each concept = one MD file in `data/vault/concepts/`
-3. Relation types encoded as structured lines in `## 关系` section
-4. Frontend receives same `GraphView` schema as before — Cytoscape code reused
-5. Clicking a node shows the raw concept MD rendered with react-markdown
+1. Graph is ephemeral: derived on-demand from active concept pages, never stored separately
+2. Extraction is lossless: same-name concepts remain separate active files until a merge decision is executed
+3. Merge decisions are first-class Markdown audit objects under `data/vault/decisions/merge/`
+4. Relation types are encoded as structured lines in `## 关系` section
+5. Frontend receives the same `GraphView` schema as before — Cytoscape code reused
+6. Clicking a node shows the raw concept MD rendered with react-markdown
 
 ## SSOT: Concept Vault Schema
 
@@ -100,10 +103,12 @@ or architecture docs disagree with this section, this section wins.
 
 ### Identity
 
-- Concept identity is the normalized concept name.
-- Same normalized `name` means the same concept.
-- Concept path: `data/vault/concepts/{safe_name}.md`.
-- Stable node id: `concept_{safe_name}`. It is independent of textbook, chapter, and extraction order.
+- Concept identity is the concept file path, not only the normalized concept name.
+- `canonical_name` stores the normalized/original concept name emitted by extraction.
+- Same `canonical_name` means "merge candidate", not "safe to merge automatically".
+- First concept path: `data/vault/concepts/{safe_name}.md`.
+- Same-name follow-up path: `data/vault/concepts/{safe_name}__{textbook_id}__{chapter_id}__{n}.md`.
+- Stable node id: `concept_{path_stem}`. It is independent of extraction order.
 - `safe_name` currently preserves Unicode and replaces `/` and `\` with `_`.
 
 ### Frontmatter
@@ -111,10 +116,14 @@ or architecture docs disagree with this section, this section wins.
 ```yaml
 ---
 id: concept_细胞膜
+canonical_name: 细胞膜
+status: active
 category: 核心概念
 aliases:
   - 质膜
   - cell membrane
+merge_decisions:
+  - merge_same_name_细胞膜
 sources:
   - textbook_id: doc_abc123
     chapter_id: ch_001
@@ -133,10 +142,13 @@ sources:
 
 Required fields:
 
-- `id`: stable id, always `concept_{safe_name}`.
+- `id`: stable id, always `concept_{path_stem}`.
+- `canonical_name`: concept name used for same-name grouping and display.
+- `status`: `active` for graph/search-visible concepts; `archived` after merge execution.
 - `category`: current representative category.
-- `aliases`: deduplicated aliases across all sources.
-- `sources`: all chapter-level source records for this concept.
+- `aliases`: aliases for this concept page.
+- `sources`: chapter-level source records for this concept page.
+- `merge_decisions`: decision ids that mention this concept.
 
 Optional source fields:
 
@@ -144,28 +156,55 @@ Optional source fields:
 - `definition`: raw extracted definition from that source.
 - `evidence`: direct source quote or short continuous excerpt.
 
-### Parse-Time Merge Rules
+### Parse-Time Concept Rules
 
-When extraction emits a concept whose path already exists, do not overwrite the
-page. Merge it.
+When extraction emits a concept, do not overwrite an existing active concept and
+do not merge definitions at parse time.
 
-- Preserve existing `id`.
-- Append a new `sources[]` entry for a new `(textbook_id, chapter_id)` source.
-- If the same `(textbook_id, chapter_id)` is extracted again, replace that source entry instead of duplicating it. This keeps re-runs idempotent.
-- Merge `aliases` by ordered set union.
-- Preserve existing `category`; if missing, use the incoming category.
-- Merge relation lines by `(relation_type, target)` and keep one graph edge per pair.
-- Preserve raw definitions/evidence per source. Do not synthesize or rewrite the canonical content during parse-time merge.
+- If `concepts/{safe_name}.md` does not exist as an active concept, create it.
+- If an active concept with the same `canonical_name` exists, write the new page
+  as `concepts/{safe_name}__{textbook_id}__{chapter_id}__{n}.md`.
+- The new page keeps its own `sources[]`, relations, evidence, and aliases.
+- Same-name collisions create or update a merge decision candidate.
+- Reruns may produce additional suffixed pages; v1 prioritizes auditability over
+  aggressive idempotent collapse.
 
-### Content Merge Worker
+### Merge Decisions
 
-Parse-time merge is deliberately lossless and shallow. A later content-merge
-worker may read `sources[]` and the body, then write a synthesized definition,
-deduplicate explanations, and emit integration decisions.
+Merge decisions live at `data/vault/decisions/merge/{decision_id}.md`. A single
+decision file moves through `candidate -> applied | failed`.
 
-The worker must not delete source records. It may add derived fields such as
-`merge_status`, `merge_decision_id`, or a synthesized `## 综合定义` section, but
-`sources[]` remains the audit trail.
+Required decision frontmatter:
+
+- `decision_id`
+- `status`: `candidate`, `applied`, or `failed`
+- `trigger`: `same_name`, `manual_scan`, or `external_scan`
+- `method`: `deterministic_same_name`, `codex_gpt_scan`, or `manual`
+- `affected_nodes`: active concept paths before execution
+- `result_name`
+- `result_node`
+- `reason_summary`
+- `created_at`, `updated_at`
+
+Decision body must keep merge-before wikilinks, scan notes, execute notes, and
+failure reason when applicable. Execute updates the same decision file; it does
+not create a second audit object.
+
+### Merge Execution
+
+The merge API is an executor, not a judge. It only runs after a candidate has
+already decided that nodes should merge.
+
+- Successful execution writes `concepts/{safe_result_name}.md`.
+- The merged node frontmatter includes `canonical_name`, `status: active`,
+  `merged_from`, and `merge_decision`.
+- Old nodes move to `archive/concepts/{decision_id}/{old_filename}.md`.
+- Archived nodes are marked with `status: archived`, `archived_from`,
+  `merged_into`, and `merge_decision`.
+- Active vault content such as `concepts/` and `textbooks/` has wikilinks
+  rewritten from old node names to the merged node name.
+- `archive/` and `decisions/` are not rewritten; they preserve audit history.
+- `[[old]]` becomes `[[new]]`; `[[old|label]]` becomes `[[new|label]]`.
 
 ### Frequency Statistics
 
@@ -183,3 +222,6 @@ Frequency must be derived from `sources[]`, not guessed from filenames.
 
 This distinction matters: one concept repeated in five chapters of one book is
 not the same signal as one concept appearing in five different books.
+
+Archived concepts, decision files, and archive files must not appear in graph or
+search results.

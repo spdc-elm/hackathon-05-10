@@ -168,6 +168,118 @@ class TestGraph:
         assert resp.status_code == 400
 
 
+class TestMergeAPI:
+    def test_scan_and_read_decision(self, client: TestClient, isolated_dirs) -> None:
+        from app.services.vault import VaultService
+        vault = VaultService(isolated_dirs["vault"])
+        vault.ensure_structure()
+        vault.write_page(
+            "concepts/A.md",
+            {"canonical_name": "A", "status": "active"},
+            "# A",
+        )
+        vault.write_page(
+            "concepts/A__doc2__ch1__1.md",
+            {"canonical_name": "A", "status": "active"},
+            "# A",
+        )
+
+        resp = client.post("/api/merge/scan")
+        assert resp.status_code == 200
+        decisions = resp.json()["decisions"]
+        assert len(decisions) == 1
+        assert decisions[0]["decision_id"] == "merge_same_name_A"
+
+        detail_resp = client.get("/api/merge/decisions/merge_same_name_A")
+        assert detail_resp.status_code == 200
+        detail = detail_resp.json()
+        assert detail["frontmatter"]["status"] == "candidate"
+        assert "A__doc2__ch1__1" in detail["wikilinks"]
+
+    def test_execute_merge_endpoint(self, client: TestClient, isolated_dirs) -> None:
+        from app.services.vault import VaultService
+        vault = VaultService(isolated_dirs["vault"])
+        vault.ensure_structure()
+        vault.write_page(
+            "concepts/A.md",
+            {"canonical_name": "A", "status": "active"},
+            "# A",
+        )
+        vault.write_page(
+            "concepts/A__doc2__ch1__1.md",
+            {"canonical_name": "A", "status": "active"},
+            "# A",
+        )
+        client.post("/api/merge/scan")
+
+        resp = client.post(
+            "/api/merge/execute",
+            json={
+                "decision_id": "merge_same_name_A",
+                "affected_nodes": ["concepts/A.md", "concepts/A__doc2__ch1__1.md"],
+                "result_name": "A",
+                "frontmatter": {},
+                "body": "# A\n\nMerged",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "applied"
+        assert vault.read_page("concepts/A.md").frontmatter["merge_decision"] == "merge_same_name_A"
+
+    def test_execute_invalid_payload_returns_422(self, client: TestClient, isolated_dirs) -> None:
+        from app.services.vault import VaultService
+        vault = VaultService(isolated_dirs["vault"])
+        vault.ensure_structure()
+        vault.write_page("concepts/A.md", {"canonical_name": "A", "status": "active"}, "# A")
+        vault.write_page("concepts/B.md", {"canonical_name": "A", "status": "active"}, "# B")
+        client.post("/api/merge/scan")
+
+        resp = client.post(
+            "/api/merge/execute",
+            json={
+                "decision_id": "merge_same_name_A",
+                "affected_nodes": ["concepts/A.md", "concepts/B.md"],
+                "result_name": "A",
+                "frontmatter": {},
+                "body": "",
+            },
+        )
+
+        assert resp.status_code == 422
+        assert vault.read_page("concepts/B.md").frontmatter["status"] == "active"
+
+    def test_execute_conflict_returns_409(self, client: TestClient, isolated_dirs) -> None:
+        from app.services.vault import VaultService
+        vault = VaultService(isolated_dirs["vault"])
+        vault.ensure_structure()
+        vault.write_page("concepts/A.md", {"canonical_name": "A", "status": "active"}, "# A")
+        vault.write_page("concepts/B.md", {"canonical_name": "B", "status": "active"}, "# B")
+        vault.write_page("concepts/C.md", {"canonical_name": "C", "status": "active"}, "# C")
+        client.post(
+            "/api/merge/decisions",
+            json={
+                "decision_id": "merge_manual_C",
+                "affected_nodes": ["concepts/A.md", "concepts/B.md"],
+                "result_name": "C",
+                "reason_summary": "manual",
+            },
+        )
+
+        resp = client.post(
+            "/api/merge/execute",
+            json={
+                "decision_id": "merge_manual_C",
+                "affected_nodes": ["concepts/A.md", "concepts/B.md"],
+                "result_name": "C",
+                "frontmatter": {},
+                "body": "# C\n\nMerged",
+            },
+        )
+
+        assert resp.status_code == 409
+
+
 class TestExtractionStatus:
     def test_upload_triggers_extraction(self, client: TestClient) -> None:
         content = "# Test\n\nContent"

@@ -1,4 +1,13 @@
-import type { GraphView, WikiNodeDetail, SearchResponse, VaultPageSummary, VaultPageDetail } from "../types/graph";
+import type {
+  GraphView,
+  WikiNodeDetail,
+  SearchResponse,
+  VaultPageSummary,
+  VaultPageDetail,
+  MergeDecisionDetail,
+  MergeDecisionFilter,
+  MergeDecisionSummary,
+} from "../types/graph";
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(path, options);
@@ -79,6 +88,21 @@ export async function fetchNodeDetail(name: string): Promise<WikiNodeDetail> {
 
 export async function fetchSearch(query: string): Promise<SearchResponse> {
   return apiFetch<SearchResponse>(`/api/graph/search?q=${encodeURIComponent(query)}`);
+}
+
+// --- Merge decisions ---
+
+export async function scanMergeDecisions(): Promise<{ decisions: MergeDecisionSummary[] }> {
+  return apiFetch("/api/merge/scan", { method: "POST" });
+}
+
+export async function fetchMergeDecisions(status: MergeDecisionFilter = "candidate"): Promise<{ decisions: MergeDecisionSummary[] }> {
+  const params = status === "all" ? "" : `?status=${encodeURIComponent(status)}`;
+  return apiFetch(`/api/merge/decisions${params}`);
+}
+
+export async function fetchMergeDecisionDetail(decisionId: string): Promise<MergeDecisionDetail> {
+  return apiFetch(`/api/merge/decisions/${encodeURIComponent(decisionId)}`);
 }
 
 // --- Vault ---

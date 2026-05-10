@@ -18,6 +18,12 @@ from app.parsers.base import ParsedChapter, ParsedDocument
 from app.services.concept_writer import ConceptWriter
 from app.services.graph_builder import GraphBuilder
 from app.services.llm import LLMConfigurationError, LLMError
+from app.services.merge_service import (
+    MergeConflictError,
+    MergeNotFoundError,
+    MergeService,
+    MergeValidationError,
+)
 from app.services.vault import VaultService
 from app.storage.repository import RuntimeRepository
 
@@ -53,6 +59,10 @@ def get_runtime_repository() -> RuntimeRepository:
 
 def get_graph_builder(vault: VaultService = Depends(get_vault_service)) -> GraphBuilder:
     return GraphBuilder(vault)
+
+
+def get_merge_service(vault: VaultService = Depends(get_vault_service)) -> MergeService:
+    return MergeService(vault)
 
 
 # --- Health ---
@@ -165,7 +175,7 @@ def delete_document(
         for md_file in list(concepts_dir.glob("*.md")):
             try:
                 page = vault.read_page(f"concepts/{md_file.name}")
-                if page.frontmatter.get("textbook_id") == document_id:
+                if _concept_belongs_to_document(page.frontmatter, document_id):
                     md_file.unlink()
             except Exception:
                 continue
@@ -275,6 +285,94 @@ def search_graph(
         raise HTTPException(status_code=400, detail="q is required.")
     matches = builder.search_nodes(q)
     return {"matches": matches}
+
+
+# --- Merge Decisions ---
+
+
+@app.post("/api/merge/scan")
+def scan_merge_candidates(
+    merge_service: MergeService = Depends(get_merge_service),
+) -> dict[str, Any]:
+    decisions = merge_service.scan_same_name_candidates()
+    return {"decisions": [decision.to_dict() for decision in decisions]}
+
+
+@app.post("/api/merge/decisions")
+def create_merge_decision(
+    request: dict[str, Any],
+    merge_service: MergeService = Depends(get_merge_service),
+) -> dict[str, Any]:
+    try:
+        decision = merge_service.create_or_update_candidate(
+            decision_id=request.get("decision_id"),
+            affected_nodes=request.get("affected_nodes"),
+            result_name=str(request.get("result_name") or ""),
+            reason_summary=str(request.get("reason_summary") or ""),
+            trigger=str(request.get("trigger") or "external_scan"),
+            method=str(request.get("method") or "manual"),
+            reasoning_md=str(request.get("reasoning_md") or ""),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MergeValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return decision.to_dict()
+
+
+@app.get("/api/merge/decisions")
+def list_merge_decisions(
+    status: str | None = None,
+    merge_service: MergeService = Depends(get_merge_service),
+) -> dict[str, Any]:
+    try:
+        decisions = merge_service.list_decisions(status=status)
+    except MergeValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"decisions": [decision.to_dict() for decision in decisions]}
+
+
+@app.get("/api/merge/decisions/{decision_id}")
+def get_merge_decision(
+    decision_id: str,
+    merge_service: MergeService = Depends(get_merge_service),
+) -> dict[str, Any]:
+    try:
+        page = merge_service.read_decision(decision_id)
+    except MergeValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except MergeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Merge decision not found.") from exc
+    return {
+        "path": page.path,
+        "frontmatter": page.frontmatter,
+        "content_md": page.body,
+        "wikilinks": page.wikilinks,
+    }
+
+
+@app.post("/api/merge/execute")
+def execute_merge(
+    request: dict[str, Any],
+    merge_service: MergeService = Depends(get_merge_service),
+) -> dict[str, Any]:
+    try:
+        decision = merge_service.execute_merge(
+            decision_id=str(request.get("decision_id") or ""),
+            affected_nodes=request.get("affected_nodes"),
+            result_name=str(request.get("result_name") or ""),
+            frontmatter=request.get("frontmatter"),
+            body=request.get("body"),
+        )
+    except MergeConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except MergeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Merge decision not found.") from exc
+    except (FileNotFoundError, MergeValidationError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return decision.to_dict()
 
 
 # --- Background tasks ---
@@ -387,6 +485,18 @@ def _chapter_summary(chapter: ParsedChapter) -> dict[str, Any]:
         "page_start": chapter.page_start,
         "page_end": chapter.page_end,
     }
+
+
+def _concept_belongs_to_document(frontmatter: dict[str, Any], document_id: str) -> bool:
+    if frontmatter.get("textbook_id") == document_id:
+        return True
+    sources = frontmatter.get("sources")
+    if not isinstance(sources, list):
+        return False
+    return any(
+        isinstance(source, dict) and source.get("textbook_id") == document_id
+        for source in sources
+    )
 
 
 def _now_iso() -> str:

@@ -1,6 +1,8 @@
 export type GraphViewNode = {
   id: string;
+  name: string;
   label: string;
+  canonical_name?: string;
   category: string;
   document_id: string;
   chapter_id: string;
@@ -8,6 +10,7 @@ export type GraphViewNode = {
   source_documents: string[];
   size: number;
   color_key: string;
+  merge_decision?: string | null;
 };
 
 export type GraphViewEdge = {
@@ -44,14 +47,49 @@ export type WikiNodeDetail = {
   node: {
     id: string;
     name: string;
+    canonical_name?: string;
     aliases: string[];
     definition: string;
     category: string;
     textbook_id: string;
     chapter_id: string;
     evidence: string;
+    merge_decision?: string | null;
+    merged_from?: string[];
   };
   content_md: string;
+};
+
+export type MergeDecisionStatus = "candidate" | "applied" | "failed";
+
+export type MergeDecisionFilter = MergeDecisionStatus | "all";
+
+export type MergeDecisionSummary = {
+  decision_id: string;
+  status: MergeDecisionStatus | string;
+  method: string;
+  result_name: string;
+  result_node?: string | null;
+  affected_nodes: string[];
+  reason_summary: string;
+  updated_at: string;
+};
+
+export type MergeDecisionDetail = {
+  path: string;
+  frontmatter: {
+    decision_id?: string;
+    status?: MergeDecisionStatus | string;
+    method?: string;
+    result_name?: string;
+    result_node?: string | null;
+    affected_nodes?: string[];
+    reason_summary?: string;
+    updated_at?: string;
+    [key: string]: unknown;
+  };
+  content_md: string;
+  wikilinks: string[];
 };
 
 export type SearchMatch = {

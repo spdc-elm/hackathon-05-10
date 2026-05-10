@@ -36,6 +36,7 @@ experiments/**/generated/
 # Runtime indexes / caches
 data/
 src/backend/data/
+src/backend/data_bak/
 *.sqlite
 *.sqlite3
 *.db

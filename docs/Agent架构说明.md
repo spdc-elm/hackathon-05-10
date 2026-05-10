@@ -8,9 +8,11 @@
 graph TD
     A[Document Parser Module] -->|ParsedDocument| B[Concept Writer Module]
     B -->|writes MD files| C[Obsidian Vault]
-    C -->|scanned by| D[Graph Builder Module]
-    D -->|GraphView JSON| E[Frontend Renderer]
-    C -->|read by| F[RAG Module - planned]
+    B -->|same-name candidates| D[Merge Decision Module]
+    D -->|execute approved merge| C
+    C -->|scanned by| E[Graph Builder Module]
+    E -->|GraphView JSON| F[Frontend Renderer]
+    C -->|read by| H[RAG Module - planned]
     C -->|edited by| G[Teacher Feedback - planned]
 ```
 
@@ -56,11 +58,12 @@ graph TD
    → ConceptWriter.extract_and_write(doc)
      → for each chapter:
        → LLMClient.generate_json(prompt) → {concepts: [...]}
-       → _write_concept(concept) → vault/concepts/{name}.md
+       → _write_concept(concept) → vault/concepts/{name or suffixed_name}.md
+       → same-name conflict → MergeService.create_or_update_same_name_candidate()
 
 3. GET /api/graph
    → GraphBuilder.build_graph_view()
-     → scan vault/concepts/*.md
+     → scan active vault/concepts/*.md
      → parse frontmatter → nodes[]
      → parse ## 关系 section → edges[]
      → return GraphView JSON
@@ -69,6 +72,14 @@ graph TD
    → GraphBuilder.get_node_detail(name)
      → read vault/concepts/{name}.md
      → return {node: {...}, content_md: "..."}
+
+5. POST /api/merge/execute
+   → MergeService.execute()
+     → validate candidate + payload
+     → write merged concept
+     → move old concepts to archive/concepts/{decision_id}/
+     → rewrite active wikilinks
+     → update decision status to applied
 ```
 
 ### 关键接口
@@ -77,6 +88,8 @@ graph TD
 |------|------|------|
 | `PdfParser.parse()` | file path | ParsedDocument |
 | `ConceptWriter.extract_and_write()` | ParsedDocument | list[vault_path] |
+| `MergeService.scan_same_name_candidates()` | (reads vault) | decision summaries |
+| `MergeService.execute()` | decision_id + merged body | applied decision |
 | `GraphBuilder.build_graph_view()` | (reads vault) | GraphView JSON |
 | `VaultService.read_page()` | relative_path | VaultPage |
 
@@ -111,14 +124,14 @@ User: 教材: {title}, 章节: {chapter_title}, 正文: {content[:8000]}
 
 ### 已知局限
 
-1. **概念去重**：当前依赖 LLM 输出的 name 规范化，同一概念不同表述可能生成多个文件
+1. **语义去重**：v1 内置 scan 只做 deterministic same-name；同义不同名需外部 scanner 写入 candidate
 2. **大规模性能**：1000+ 概念文件时，每次 GET /api/graph 都全量扫描。可通过缓存优化
 3. **并发写入**：多个 extraction job 同时写入 vault 可能产生文件冲突
 4. **关系类型有限**：只支持 4 种关系类型，复杂知识结构可能需要扩展
 
 ### 改进方向（给更多时间）
 
-1. **Embedding 对齐**：对 vault/concepts/ 中的文件做 embedding，自动发现语义重复
+1. **Embedding 对齐**：对 vault/concepts/ 中的文件做 embedding，自动发现语义重复并写入 candidate
 2. **增量图谱更新**：只扫描修改过的文件，而非全量
 3. **Obsidian Plugin**：开发一个 Obsidian 插件直接与后端交互
 4. **Git-based versioning**：vault 本身用 git 管理，支持回滚整合决策
@@ -127,5 +140,6 @@ User: 教材: {title}, 章节: {chapter_title}, 正文: {content[:8000]}
 
 1. **Vault-as-State 架构**：知识库即文件系统，无中间抽象层
 2. **派生式图谱**：从 wikilinks 实时构建，永远与内容一致
-3. **Obsidian 兼容**：data/vault/ 可直接作为 Obsidian vault 打开
-4. **JSON 信封 + MD 载荷**：API 满足赛题 JSON 要求，同时内容是 human-readable markdown
+3. **Merge Decision as Markdown**：整合判断、失败和执行结果都是可审计页面
+4. **Obsidian 兼容**：data/vault/ 可直接作为 Obsidian vault 打开
+5. **JSON 信封 + MD 载荷**：API 满足赛题 JSON 要求，同时内容是 human-readable markdown

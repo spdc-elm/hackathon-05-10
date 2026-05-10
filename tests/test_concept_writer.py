@@ -105,11 +105,14 @@ class TestConceptWriter:
         writer = ConceptWriter(vault, client=client)
         await writer.extract_and_write(document)
         page = vault.read_page("concepts/炎症.md")
-        assert page.frontmatter["id"] == "book_01_node_001"
+        assert page.frontmatter["id"] == "concept_炎症"
+        assert page.frontmatter["canonical_name"] == "炎症"
+        assert page.frontmatter["status"] == "active"
         assert page.frontmatter["category"] == "核心概念"
         assert page.frontmatter["textbook_id"] == "book_01"
         assert "confidence" not in page.frontmatter
         assert "inflammation" in page.frontmatter["aliases"]
+        assert page.frontmatter["sources"][0]["textbook_id"] == "book_01"
 
     @pytest.mark.asyncio
     async def test_concept_file_has_wikilinks(
@@ -133,6 +136,39 @@ class TestConceptWriter:
         page = vault.read_page("concepts/炎症.md")
         assert "原文证据" in page.body
         assert "炎症是具有血管系统" in page.body
+
+    @pytest.mark.asyncio
+    async def test_same_name_writes_suffixed_concept_and_candidate(
+        self, vault: VaultService, document: ParsedDocument
+    ) -> None:
+        client = FakeLLMClient(FAKE_LLM_RESPONSE)
+        writer = ConceptWriter(vault, client=client)
+        await writer.extract_and_write(document)
+
+        second = ParsedDocument(
+            textbook_id="book_02",
+            filename="病理学2.pdf",
+            title="病理学2",
+            total_pages=100,
+            total_chars=5000,
+            chapters=document.chapters,
+            format="pdf",
+        )
+        paths = await writer.extract_and_write(second)
+
+        assert "concepts/炎症__book_02__ch_001__1.md" in paths
+        original = vault.read_page("concepts/炎症.md")
+        duplicate = vault.read_page("concepts/炎症__book_02__ch_001__1.md")
+        decision_id = "merge_same_name_炎症"
+        assert decision_id in original.frontmatter["merge_decisions"]
+        assert decision_id in duplicate.frontmatter["merge_decisions"]
+
+        decision = vault.read_page(f"decisions/merge/{decision_id}.md")
+        assert decision.frontmatter["status"] == "candidate"
+        assert decision.frontmatter["affected_nodes"] == [
+            "concepts/炎症.md",
+            "concepts/炎症__book_02__ch_001__1.md",
+        ]
 
 
 class TestTextbookChapterWriter:

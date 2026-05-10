@@ -12,6 +12,7 @@ function buildElements(view: GraphView): cytoscape.ElementDefinition[] {
     group: "nodes",
     data: {
       id: n.id,
+      name: n.name,
       label: n.label,
       size: n.size,
       color: resolveGraphColor(n.color_key),
@@ -35,7 +36,7 @@ function buildElements(view: GraphView): cytoscape.ElementDefinition[] {
 
 function graphSignature(view: GraphView): string {
   const nodes = view.nodes
-    .map((n) => `${n.id}:${n.label}:${n.color_key}:${n.size}`)
+    .map((n) => `${n.id}:${n.name}:${n.label}:${n.color_key}:${n.size}`)
     .join("|");
   const edges = view.edges
     .map((e) => `${e.id}:${e.source}>${e.target}:${e.relation_type}`)
@@ -182,7 +183,7 @@ export function GraphCanvas() {
       const view = graphViewRef.current;
       if (view) {
         const found = view.nodes.find((n) => n.id === nodeId);
-        setSelectedRef.current(found?.label ?? nodeId);
+        setSelectedRef.current(found?.name ?? nodeId);
       }
     });
 
@@ -231,7 +232,7 @@ export function GraphCanvas() {
     if (searchMatches.length > 0) {
       const matchNames = new Set(searchMatches.map((m) => m.name));
       cy.nodes().forEach((node) => {
-        if (matchNames.has(node.data("label"))) {
+        if (matchNames.has(node.data("name")) || matchNames.has(node.data("label"))) {
           node.addClass("highlighted");
         } else {
           node.addClass("faded");
@@ -240,7 +241,12 @@ export function GraphCanvas() {
       cy.edges().forEach((edge) => {
         const src = edge.source();
         const tgt = edge.target();
-        if (!matchNames.has(src.data("label")) && !matchNames.has(tgt.data("label"))) {
+        if (
+          !matchNames.has(src.data("name")) &&
+          !matchNames.has(src.data("label")) &&
+          !matchNames.has(tgt.data("name")) &&
+          !matchNames.has(tgt.data("label"))
+        ) {
           edge.addClass("faded");
         }
       });
@@ -258,7 +264,9 @@ export function GraphCanvas() {
     });
 
     if (selectedNodeName) {
-      const found = graphView.nodes.find((n) => n.label === selectedNodeName);
+      const found = graphView.nodes.find(
+        (n) => n.name === selectedNodeName || n.label === selectedNodeName
+      );
       if (found) {
         const node = cy.getElementById(found.id);
         if (node.length) {

@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from app.services.merge_service import safe_name
 from app.services.vault import VaultService, VaultPage
 
 
@@ -51,23 +52,27 @@ class GraphBuilder:
         }
 
     def get_node_detail(self, concept_name: str) -> dict[str, Any] | None:
-        safe_name = concept_name.replace("/", "_").replace("\\", "_")
-        path = f"concepts/{safe_name}.md"
+        path = f"concepts/{safe_name(concept_name)}.md"
         try:
             page = self.vault.read_page(path)
         except FileNotFoundError:
             return None
+        if page.frontmatter.get("status") == "archived":
+            return None
 
         return {
             "node": {
-                "id": page.frontmatter.get("id", safe_name),
-                "name": concept_name,
+                "id": page.frontmatter.get("id", Path(page.path).stem),
+                "name": Path(page.path).stem,
+                "canonical_name": page.frontmatter.get("canonical_name", concept_name),
                 "aliases": page.frontmatter.get("aliases", []),
                 "definition": self._extract_definition(page.body),
                 "category": page.frontmatter.get("category", ""),
                 "textbook_id": page.frontmatter.get("textbook_id", ""),
                 "chapter_id": page.frontmatter.get("chapter_id", ""),
                 "evidence": self._extract_evidence(page.body),
+                "merge_decision": page.frontmatter.get("merge_decision"),
+                "merged_from": page.frontmatter.get("merged_from", []),
             },
             "content_md": page.body,
         }
@@ -84,12 +89,16 @@ class GraphBuilder:
 
         for md_file in concepts_dir.rglob("*.md"):
             name = md_file.stem
-            if query_lower in name.lower():
+            content = md_file.read_text(encoding="utf-8")
+            fm, _ = self.vault._parse_frontmatter(content)
+            if fm.get("status") == "archived":
+                continue
+
+            canonical_name = str(fm.get("canonical_name") or name)
+            if query_lower in name.lower() or query_lower in canonical_name.lower():
                 matches.append({"name": name, "match_field": "name", "score": 1.0})
                 continue
 
-            content = md_file.read_text(encoding="utf-8")
-            fm, _ = self.vault._parse_frontmatter(content)
             aliases = fm.get("aliases", [])
             if any(query_lower in str(a).lower() for a in aliases):
                 matches.append({"name": name, "match_field": "aliases", "score": 0.8})
@@ -106,21 +115,34 @@ class GraphBuilder:
             relative = str(md_file.relative_to(self.vault.root))
             content = md_file.read_text(encoding="utf-8")
             fm, body = self.vault._parse_frontmatter(content)
+            if fm.get("status") == "archived":
+                continue
             wikilinks = self.vault._extract_wikilinks(body)
             pages.append(VaultPage(path=relative, frontmatter=fm, body=body, wikilinks=wikilinks))
         return pages
 
     def _build_nodes(self, pages: list[VaultPage]) -> list[dict[str, Any]]:
         nodes: list[dict[str, Any]] = []
+        canonical_counts: dict[str, int] = {}
+        for page in pages:
+            canonical_name = self._canonical_name(page)
+            canonical_counts[canonical_name] = canonical_counts.get(canonical_name, 0) + 1
+
         for page in pages:
             fm = page.frontmatter
             name = Path(page.path).stem
+            canonical_name = self._canonical_name(page)
             source_records = self._source_records(fm)
             source_documents = self._source_documents(source_records)
             document_id = "merged" if len(source_documents) > 1 else source_documents[0]
+            label = canonical_name
+            if canonical_counts.get(canonical_name, 0) > 1:
+                label = f"{canonical_name} · {self._source_hint(source_records)}"
             nodes.append({
                 "id": fm.get("id", name),
-                "label": name,
+                "name": name,
+                "label": label,
+                "canonical_name": canonical_name,
                 "category": fm.get("category", "核心概念"),
                 "document_id": document_id,
                 "chapter_id": fm.get("chapter_id", ""),
@@ -128,6 +150,7 @@ class GraphBuilder:
                 "source_documents": source_documents,
                 "size": 20,
                 "color_key": self._source_color_key(source_documents),
+                "merge_decision": fm.get("merge_decision"),
             })
         return nodes
 
@@ -170,7 +193,8 @@ class GraphBuilder:
             if not relation_type:
                 continue
             for link_match in re.finditer(r"\[\[([^\]]+)\]\]", targets_text):
-                results.append((link_match.group(1), relation_type))
+                target = link_match.group(1).split("|", 1)[0].strip()
+                results.append((target, relation_type))
         return results
 
     def _build_legend(self, pages: list[VaultPage]) -> dict[str, Any]:
@@ -238,6 +262,17 @@ class GraphBuilder:
 
     def _source_color_key(self, source_documents: list[str]) -> str:
         return "merged" if len(source_documents) > 1 else source_documents[0]
+
+    def _canonical_name(self, page: VaultPage) -> str:
+        return str(page.frontmatter.get("canonical_name") or Path(page.path).stem).strip()
+
+    def _source_hint(self, source_records: list[dict[str, Any]]) -> str:
+        if not source_records:
+            return "unknown"
+        first = source_records[0]
+        textbook_id = str(first.get("textbook_id") or "unknown")
+        chapter_id = str(first.get("chapter_id") or "").strip()
+        return f"{textbook_id}/{chapter_id}" if chapter_id else textbook_id
 
     def _extract_definition(self, body: str) -> str:
         lines = body.split("\n")

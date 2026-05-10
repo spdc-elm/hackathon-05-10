@@ -7,6 +7,7 @@ from typing import Any
 
 from app.parsers.base import ParsedChapter, ParsedDocument
 from app.services.llm import LLMClient, generate_json
+from app.services.merge_service import MergeService, safe_name
 from app.services.vault import VaultService
 
 
@@ -43,6 +44,8 @@ class ExtractedConcept:
     evidence: str
     textbook_id: str
     chapter_id: str
+    page_start: int | None
+    page_end: int | None
 
 
 class ConceptWriter:
@@ -163,19 +166,39 @@ class ConceptWriter:
                 evidence=str(item.get("evidence") or ""),
                 textbook_id=document.textbook_id,
                 chapter_id=chapter.chapter_id,
+                page_start=chapter.page_start,
+                page_end=chapter.page_end,
             ))
 
         return results
 
     def _write_concept(self, concept: ExtractedConcept, document: ParsedDocument, index: int) -> str:
-        stable_id = f"{document.textbook_id}_node_{index:03d}"
+        merge_service = MergeService(self.vault)
+        relative_path = self._allocate_concept_path(concept, merge_service)
+        path_stem = relative_path.removeprefix("concepts/").removesuffix(".md")
+        stable_id = f"concept_{path_stem}"
+
+        source_record: dict[str, Any] = {
+            "textbook_id": concept.textbook_id,
+            "chapter_id": concept.chapter_id,
+            "definition": concept.definition,
+            "evidence": concept.evidence,
+        }
+        if concept.page_start is not None:
+            source_record["page_start"] = concept.page_start
+        if concept.page_end is not None:
+            source_record["page_end"] = concept.page_end
 
         frontmatter: dict[str, Any] = {
             "id": stable_id,
+            "canonical_name": concept.name,
+            "status": "active",
             "category": concept.category,
             "aliases": concept.aliases,
             "textbook_id": concept.textbook_id,
             "chapter_id": concept.chapter_id,
+            "merge_decisions": [],
+            "sources": [source_record],
         }
 
         body = f"# {concept.name}\n\n{concept.definition}\n"
@@ -191,7 +214,53 @@ class ConceptWriter:
 
         body += f"\n来源: {document.title} {concept.chapter_id}\n"
 
-        safe_name = concept.name.replace("/", "_").replace("\\", "_")
-        relative_path = f"concepts/{safe_name}.md"
         self.vault.write_page(relative_path, frontmatter, body)
+        self._create_same_name_candidate_if_needed(concept.name, merge_service)
         return relative_path
+
+    def _allocate_concept_path(
+        self, concept: ExtractedConcept, merge_service: MergeService
+    ) -> str:
+        base_safe_name = safe_name(concept.name)
+        base_path = f"concepts/{base_safe_name}.md"
+        same_name_active = [
+            page
+            for page in merge_service.active_concept_pages()
+            if merge_service.canonical_name(page) == concept.name
+        ]
+        if not same_name_active and not (self.vault.root / base_path).exists():
+            return base_path
+
+        textbook = safe_name(concept.textbook_id)
+        chapter = safe_name(concept.chapter_id)
+        suffix_base = f"concepts/{base_safe_name}__{textbook}__{chapter}"
+        n = 1
+        while True:
+            candidate = f"{suffix_base}__{n}.md"
+            if not (self.vault.root / candidate).exists():
+                return candidate
+            n += 1
+
+    def _create_same_name_candidate_if_needed(
+        self, canonical_name: str, merge_service: MergeService
+    ) -> None:
+        pages = [
+            page
+            for page in merge_service.active_concept_pages()
+            if merge_service.canonical_name(page) == canonical_name
+        ]
+        if len(pages) < 2:
+            return
+
+        merge_service.create_or_update_candidate(
+            affected_nodes=[page.path for page in pages],
+            result_name=canonical_name,
+            reason_summary=f"Same canonical_name: {canonical_name}",
+            trigger="same_name",
+            method="deterministic_same_name",
+            decision_id=merge_service.same_name_decision_id(canonical_name),
+            reasoning_md=(
+                "Concept extraction wrote a same-name active concept and "
+                "created this deterministic merge candidate."
+            ),
+        )

@@ -2,7 +2,7 @@ import { useGraphContext } from "../context/GraphContext";
 import { MarkdownViewer } from "./MarkdownViewer";
 
 export function NodeDetailPanel() {
-  const { selectedNodeName, nodeDetail, nodeDetailLoading, setSelectedNodeName } = useGraphContext();
+  const { selectedNodeName, nodeDetail, nodeDetailLoading, setSelectedNodeName, openMergeDecision } = useGraphContext();
 
   return (
     <aside className={`detail-panel ${selectedNodeName ? "open" : ""}`}>
@@ -31,6 +31,24 @@ export function NodeDetailPanel() {
               <span className="detail-meta-tag">{nodeDetail.node.chapter_id}</span>
             )}
           </div>
+
+          {nodeDetail.node.merge_decision && (
+            <button
+              className="detail-decision-link"
+              type="button"
+              onClick={() => openMergeDecision(nodeDetail.node.merge_decision!)}
+            >
+              Merge decision: {nodeDetail.node.merge_decision}
+            </button>
+          )}
+
+          {nodeDetail.node.merged_from && nodeDetail.node.merged_from.length > 0 && (
+            <div className="detail-aliases">
+              {nodeDetail.node.merged_from.map((source) => (
+                <span key={source} className="alias-tag">from {source}</span>
+              ))}
+            </div>
+          )}
 
           {/* Aliases */}
           {nodeDetail.node.aliases.length > 0 && (
