@@ -134,7 +134,8 @@ class GraphBuilder:
             canonical_name = self._canonical_name(page)
             source_records = self._source_records(fm)
             source_documents = self._source_documents(source_records)
-            document_id = "merged" if len(source_documents) > 1 else source_documents[0]
+            color_key = self._node_color_key(fm, source_documents)
+            document_id = "merged" if color_key == "merged" else source_documents[0]
             label = canonical_name
             if canonical_counts.get(canonical_name, 0) > 1:
                 label = f"{canonical_name} · {self._source_hint(source_records)}"
@@ -149,7 +150,7 @@ class GraphBuilder:
                 "source_count": len(source_records),
                 "source_documents": source_documents,
                 "size": 20,
-                "color_key": self._source_color_key(source_documents),
+                "color_key": color_key,
                 "merge_decision": fm.get("merge_decision"),
             })
         return nodes
@@ -203,7 +204,7 @@ class GraphBuilder:
         has_merged = False
         for page in pages:
             source_documents = self._source_documents(self._source_records(page.frontmatter))
-            if len(source_documents) > 1:
+            if self._node_color_key(page.frontmatter, source_documents) == "merged":
                 has_merged = True
             for doc_id in source_documents:
                 if doc_id in seen_docs:
@@ -262,6 +263,17 @@ class GraphBuilder:
 
     def _source_color_key(self, source_documents: list[str]) -> str:
         return "merged" if len(source_documents) > 1 else source_documents[0]
+
+    def _node_color_key(self, frontmatter: dict[str, Any], source_documents: list[str]) -> str:
+        if self._is_merged_result(frontmatter):
+            return "merged"
+        return self._source_color_key(source_documents)
+
+    def _is_merged_result(self, frontmatter: dict[str, Any]) -> bool:
+        merged_from = frontmatter.get("merged_from")
+        if isinstance(merged_from, list) and any(str(item).strip() for item in merged_from):
+            return True
+        return bool(str(frontmatter.get("merge_decision") or "").strip())
 
     def _canonical_name(self, page: VaultPage) -> str:
         return str(page.frontmatter.get("canonical_name") or Path(page.path).stem).strip()

@@ -98,6 +98,36 @@ class TestGraphBuilder:
         assert node["source_documents"] == ["book1"]
         assert node["color_key"] == "book1"
 
+    def test_applied_merge_from_same_document_uses_merged_color_key(
+        self, vault: VaultService, builder: GraphBuilder
+    ) -> None:
+        vault.write_page(
+            "concepts/A.md",
+            {
+                "id": "concept_A",
+                "category": "核心概念",
+                "sources": [
+                    {"textbook_id": "book1", "chapter_id": "ch1"},
+                    {"textbook_id": "book1", "chapter_id": "ch2"},
+                ],
+                "merged_from": ["concepts/A.md", "concepts/A__book1__ch2__1.md"],
+                "merge_decision": "merge_same_name_A",
+            },
+            "# A\n\nMerged definition of A",
+        )
+
+        view = builder.build_graph_view()
+
+        node = view["nodes"][0]
+        assert node["document_id"] == "merged"
+        assert node["source_count"] == 2
+        assert node["source_documents"] == ["book1"]
+        assert node["color_key"] == "merged"
+        assert view["legend"]["documents"] == [
+            {"document_id": "book1", "title": "book1", "color_key": "book1"},
+            {"document_id": "merged", "title": "Merged", "color_key": "merged"},
+        ]
+
     def test_linked_concepts_produce_edges(self, vault: VaultService, builder: GraphBuilder) -> None:
         vault.write_page(
             "concepts/A.md",
