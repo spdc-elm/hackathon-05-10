@@ -18,14 +18,6 @@ RELATION_LABELS = {
 
 RELATION_LABELS_REVERSE = {v: k for k, v in RELATION_LABELS.items()}
 
-CATEGORY_COLORS = {
-    "核心概念": "#7ecb9a",
-    "方法": "#6ab0d4",
-    "结构": "#d4a06a",
-    "过程": "#c47ed4",
-    "物质": "#d47e7e",
-}
-
 RELATION_COLORS = {
     "prerequisite": "#e8a838",
     "contains": "#38b2e8",
@@ -75,7 +67,6 @@ class GraphBuilder:
                 "category": page.frontmatter.get("category", ""),
                 "textbook_id": page.frontmatter.get("textbook_id", ""),
                 "chapter_id": page.frontmatter.get("chapter_id", ""),
-                "confidence": page.frontmatter.get("confidence", 0.0),
                 "evidence": self._extract_evidence(page.body),
             },
             "content_md": page.body,
@@ -124,17 +115,19 @@ class GraphBuilder:
         for page in pages:
             fm = page.frontmatter
             name = Path(page.path).stem
-            textbook_id = fm.get("textbook_id", "unknown")
+            source_records = self._source_records(fm)
+            source_documents = self._source_documents(source_records)
+            document_id = "merged" if len(source_documents) > 1 else source_documents[0]
             nodes.append({
                 "id": fm.get("id", name),
                 "label": name,
                 "category": fm.get("category", "核心概念"),
-                "document_id": textbook_id,
+                "document_id": document_id,
                 "chapter_id": fm.get("chapter_id", ""),
-                "source_count": 1,
-                "source_documents": [textbook_id],
+                "source_count": len(source_records),
+                "source_documents": source_documents,
                 "size": 20,
-                "color_key": fm.get("category", "核心概念"),
+                "color_key": self._source_color_key(source_documents),
             })
         return nodes
 
@@ -183,9 +176,14 @@ class GraphBuilder:
     def _build_legend(self, pages: list[VaultPage]) -> dict[str, Any]:
         documents: list[dict[str, str]] = []
         seen_docs: set[str] = set()
+        has_merged = False
         for page in pages:
-            doc_id = page.frontmatter.get("textbook_id", "unknown")
-            if doc_id not in seen_docs:
+            source_documents = self._source_documents(self._source_records(page.frontmatter))
+            if len(source_documents) > 1:
+                has_merged = True
+            for doc_id in source_documents:
+                if doc_id in seen_docs:
+                    continue
                 seen_docs.add(doc_id)
                 documents.append({
                     "document_id": doc_id,
@@ -193,12 +191,53 @@ class GraphBuilder:
                     "color_key": doc_id,
                 })
 
+        if has_merged:
+            documents.append({
+                "document_id": "merged",
+                "title": "Merged",
+                "color_key": "merged",
+            })
+
         relations = [
             {"relation_type": rt, "label": label, "color_key": rt}
             for rt, label in RELATION_LABELS.items()
         ]
 
         return {"documents": documents, "relations": relations}
+
+    def _source_records(self, frontmatter: dict[str, Any]) -> list[dict[str, Any]]:
+        raw_sources = frontmatter.get("sources")
+        records: list[dict[str, Any]] = []
+        if isinstance(raw_sources, list):
+            for item in raw_sources:
+                if not isinstance(item, dict):
+                    continue
+                textbook_id = str(item.get("textbook_id") or "").strip()
+                if textbook_id:
+                    records.append({**item, "textbook_id": textbook_id})
+
+        if records:
+            return records
+
+        textbook_id = str(frontmatter.get("textbook_id") or "unknown").strip() or "unknown"
+        return [{
+            "textbook_id": textbook_id,
+            "chapter_id": frontmatter.get("chapter_id", ""),
+        }]
+
+    def _source_documents(self, source_records: list[dict[str, Any]]) -> list[str]:
+        documents: list[str] = []
+        seen: set[str] = set()
+        for source in source_records:
+            textbook_id = str(source.get("textbook_id") or "unknown").strip() or "unknown"
+            if textbook_id in seen:
+                continue
+            seen.add(textbook_id)
+            documents.append(textbook_id)
+        return documents or ["unknown"]
+
+    def _source_color_key(self, source_documents: list[str]) -> str:
+        return "merged" if len(source_documents) > 1 else source_documents[0]
 
     def _extract_definition(self, body: str) -> str:
         lines = body.split("\n")

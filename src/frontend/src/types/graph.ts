@@ -49,7 +49,6 @@ export type WikiNodeDetail = {
     category: string;
     textbook_id: string;
     chapter_id: string;
-    confidence: number;
     evidence: string;
   };
   content_md: string;

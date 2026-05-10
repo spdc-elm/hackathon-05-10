@@ -23,7 +23,6 @@ EXTRACTION_SYSTEM_PROMPT = """你是教材知识图谱抽取器。
     - target 是另一个概念的 name
     - description 简要说明关系
   - evidence: 章节原文中的连续短句（直接引用）
-  - confidence: 0.0-1.0
 每章最多抽取 8-15 个可教学的核心知识点。不要抽取过于宽泛或过于琐碎的概念。"""
 
 RELATION_LABELS = {
@@ -42,7 +41,6 @@ class ExtractedConcept:
     category: str
     relations: list[dict[str, str]]
     evidence: str
-    confidence: float
     textbook_id: str
     chapter_id: str
 
@@ -163,7 +161,6 @@ class ConceptWriter:
                 category=str(item.get("category") or "核心概念"),
                 relations=relations,
                 evidence=str(item.get("evidence") or ""),
-                confidence=min(1.0, max(0.0, float(item.get("confidence") or 0.8))),
                 textbook_id=document.textbook_id,
                 chapter_id=chapter.chapter_id,
             ))
@@ -179,7 +176,6 @@ class ConceptWriter:
             "aliases": concept.aliases,
             "textbook_id": concept.textbook_id,
             "chapter_id": concept.chapter_id,
-            "confidence": concept.confidence,
         }
 
         body = f"# {concept.name}\n\n{concept.definition}\n"

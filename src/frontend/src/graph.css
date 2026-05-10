@@ -246,11 +246,6 @@
   font-family: monospace;
 }
 
-.confidence-tag {
-  color: var(--accent);
-  font-weight: 600;
-}
-
 .detail-markdown-full {
   border-top: 1px solid var(--line);
   padding-top: 12px;
@@ -332,32 +327,6 @@
   line-height: 1.6;
   color: var(--muted);
   font-style: italic;
-}
-
-.confidence-bar {
-  position: relative;
-  height: 20px;
-  background: var(--surface-soft);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.confidence-fill {
-  height: 100%;
-  background: var(--accent);
-  opacity: 0.6;
-  transition: width 0.3s ease;
-}
-
-.confidence-value {
-  position: absolute;
-  top: 50%;
-  left: 8px;
-  transform: translateY(-50%);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text);
 }
 
 /* Legend */

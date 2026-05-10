@@ -41,7 +41,62 @@ class TestGraphBuilder:
         assert len(view["nodes"]) == 1
         assert view["nodes"][0]["id"] == "n1"
         assert view["nodes"][0]["label"] == "A"
+        assert view["nodes"][0]["color_key"] == "book1"
+        assert view["nodes"][0]["source_documents"] == ["book1"]
         assert view["edges"] == []
+
+    def test_multisource_concept_uses_merged_color_key(
+        self, vault: VaultService, builder: GraphBuilder
+    ) -> None:
+        vault.write_page(
+            "concepts/A.md",
+            {
+                "id": "concept_A",
+                "category": "核心概念",
+                "sources": [
+                    {"textbook_id": "book1", "chapter_id": "ch1"},
+                    {"textbook_id": "book2", "chapter_id": "ch3"},
+                ],
+            },
+            "# A\n\nDefinition of A",
+        )
+
+        view = builder.build_graph_view()
+
+        node = view["nodes"][0]
+        assert node["document_id"] == "merged"
+        assert node["source_count"] == 2
+        assert node["source_documents"] == ["book1", "book2"]
+        assert node["color_key"] == "merged"
+        assert view["legend"]["documents"] == [
+            {"document_id": "book1", "title": "book1", "color_key": "book1"},
+            {"document_id": "book2", "title": "book2", "color_key": "book2"},
+            {"document_id": "merged", "title": "Merged", "color_key": "merged"},
+        ]
+
+    def test_multiple_chapters_from_same_document_keep_document_color(
+        self, vault: VaultService, builder: GraphBuilder
+    ) -> None:
+        vault.write_page(
+            "concepts/A.md",
+            {
+                "id": "concept_A",
+                "category": "核心概念",
+                "sources": [
+                    {"textbook_id": "book1", "chapter_id": "ch1"},
+                    {"textbook_id": "book1", "chapter_id": "ch2"},
+                ],
+            },
+            "# A\n\nDefinition of A",
+        )
+
+        view = builder.build_graph_view()
+
+        node = view["nodes"][0]
+        assert node["document_id"] == "book1"
+        assert node["source_count"] == 2
+        assert node["source_documents"] == ["book1"]
+        assert node["color_key"] == "book1"
 
     def test_linked_concepts_produce_edges(self, vault: VaultService, builder: GraphBuilder) -> None:
         vault.write_page(
@@ -100,7 +155,7 @@ class TestNodeDetail:
     def test_returns_content_md(self, vault: VaultService, builder: GraphBuilder) -> None:
         vault.write_page(
             "concepts/炎症.md",
-            {"id": "n1", "category": "核心概念", "aliases": ["inflammation"], "confidence": 0.9},
+            {"id": "n1", "category": "核心概念", "aliases": ["inflammation"]},
             "# 炎症\n\n机体对损伤的防御反应\n\n## 原文证据\n\n> 原文引用\n",
         )
         detail = builder.get_node_detail("炎症")

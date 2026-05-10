@@ -3,27 +3,9 @@ import cytoscape from "cytoscape";
 import fcose from "cytoscape-fcose";
 import { useGraphContext } from "../context/GraphContext";
 import type { GraphView } from "../types/graph";
+import { resolveGraphColor } from "../utils/graphColors";
 
 cytoscape.use(fcose);
-
-const CATEGORY_COLORS: Record<string, string> = {
-  "核心概念": "#7ecb9a",
-  "方法": "#6ab0d4",
-  "结构": "#d4a06a",
-  "过程": "#c47ed4",
-  "物质": "#d47e7e",
-};
-
-const RELATION_COLORS: Record<string, string> = {
-  prerequisite: "#e8a838",
-  contains: "#38b2e8",
-  parallel: "#8ce838",
-  applies_to: "#e838b2",
-};
-
-function resolveColor(colorKey: string): string {
-  return CATEGORY_COLORS[colorKey] ?? RELATION_COLORS[colorKey] ?? "#9da697";
-}
 
 function buildElements(view: GraphView): cytoscape.ElementDefinition[] {
   const nodes: cytoscape.ElementDefinition[] = view.nodes.map((n) => ({
@@ -32,7 +14,7 @@ function buildElements(view: GraphView): cytoscape.ElementDefinition[] {
       id: n.id,
       label: n.label,
       size: n.size,
-      color: resolveColor(n.color_key),
+      color: resolveGraphColor(n.color_key),
       category: n.category,
     },
   }));
@@ -44,11 +26,21 @@ function buildElements(view: GraphView): cytoscape.ElementDefinition[] {
       source: e.source,
       target: e.target,
       label: e.label,
-      color: resolveColor(e.color_key),
+      color: resolveGraphColor(e.color_key),
     },
   }));
 
   return [...nodes, ...edges];
+}
+
+function graphSignature(view: GraphView): string {
+  const nodes = view.nodes
+    .map((n) => `${n.id}:${n.label}:${n.color_key}:${n.size}`)
+    .join("|");
+  const edges = view.edges
+    .map((e) => `${e.id}:${e.source}>${e.target}:${e.relation_type}`)
+    .join("|");
+  return `${nodes}::${edges}`;
 }
 
 const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
@@ -117,9 +109,45 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
     } as unknown as cytoscape.Css.Node,
   },
   {
+    selector: "node.outside-focus",
+    style: {
+      opacity: 0.08,
+    } as unknown as cytoscape.Css.Node,
+  },
+  {
     selector: "edge.faded",
     style: {
       opacity: 0.1,
+    } as unknown as cytoscape.Css.Edge,
+  },
+  {
+    selector: "edge.outside-focus",
+    style: {
+      opacity: 0,
+      width: 0.1,
+    } as unknown as cytoscape.Css.Edge,
+  },
+  {
+    selector: "node.focused",
+    style: {
+      opacity: 1,
+      "border-width": 4,
+      "border-color": "#e0c16a",
+    } as unknown as cytoscape.Css.Node,
+  },
+  {
+    selector: "node.focus-neighbor",
+    style: {
+      opacity: 0.9,
+      "border-width": 1.5,
+      "border-color": "#9da697",
+    } as unknown as cytoscape.Css.Node,
+  },
+  {
+    selector: "edge.focus-edge",
+    style: {
+      width: 2.4,
+      opacity: 0.95,
     } as unknown as cytoscape.Css.Edge,
   },
 ];
@@ -127,6 +155,7 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
 export function GraphCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
+  const graphSignatureRef = useRef<string | null>(null);
   const { graphView, setSelectedNodeName, searchMatches, selectedNodeName } = useGraphContext();
 
   const setSelectedRef = useRef(setSelectedNodeName);
@@ -174,13 +203,16 @@ export function GraphCanvas() {
     const cy = cyRef.current;
     if (!cy || !graphView) return;
 
+    const signature = graphSignature(graphView);
+    if (graphSignatureRef.current === signature) return;
+    graphSignatureRef.current = signature;
+
     const elements = buildElements(graphView);
     cy.elements().remove();
     cy.add(elements);
     cy.layout({
       name: "fcose",
-      animate: true,
-      animationDuration: 600,
+      animate: false,
       quality: "default",
       nodeSeparation: 80,
       idealEdgeLength: 120,
@@ -219,12 +251,47 @@ export function GraphCanvas() {
     const cy = cyRef.current;
     if (!cy || !graphView) return;
 
-    cy.nodes().unselect();
+    cy.batch(() => {
+      cy.nodes().unselect();
+      cy.nodes().removeClass("focused focus-neighbor outside-focus");
+      cy.edges().removeClass("focus-edge outside-focus");
+    });
+
     if (selectedNodeName) {
       const found = graphView.nodes.find((n) => n.label === selectedNodeName);
       if (found) {
         const node = cy.getElementById(found.id);
         if (node.length) {
+          const connectedEdges = node.connectedEdges();
+          const visibleNodeIds = new Set<string>([node.id()]);
+          const visibleEdgeIds = new Set<string>();
+
+          connectedEdges.forEach((edge) => {
+            visibleEdgeIds.add(edge.id());
+          });
+          connectedEdges.connectedNodes().forEach((connectedNode) => {
+            visibleNodeIds.add(connectedNode.id());
+          });
+
+          cy.batch(() => {
+            cy.nodes().forEach((graphNode) => {
+              if (graphNode.id() === node.id()) {
+                graphNode.addClass("focused");
+              } else if (visibleNodeIds.has(graphNode.id())) {
+                graphNode.addClass("focus-neighbor");
+              } else {
+                graphNode.addClass("outside-focus");
+              }
+            });
+            cy.edges().forEach((edge) => {
+              if (visibleEdgeIds.has(edge.id())) {
+                edge.addClass("focus-edge");
+              } else {
+                edge.addClass("outside-focus");
+              }
+            });
+          });
+
           node.select();
         }
       }

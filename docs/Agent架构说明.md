@@ -94,12 +94,11 @@ User: 教材: {title}, 章节: {chapter_title}, 正文: {content[:8000]}
 - 每章 8-15 个概念
 - relations.type 限定 4 种
 - evidence 必须是原文引用
-- confidence 0.0-1.0
 
 防幻觉策略：
 - System prompt 明确"不使用外部知识"
 - evidence 字段要求直接引用
-- confidence < 0.7 的概念在整合阶段优先删除
+- 不使用 LLM 自评 confidence；低质量过滤应基于 evidence 是否存在、来源覆盖、人工反馈或可复现评测信号
 
 ## 取舍与权衡
 

@@ -44,7 +44,6 @@ FAKE_LLM_RESPONSE = {
                 {"type": "contains", "target": "急性炎症", "description": "炎症的一种类型"},
             ],
             "evidence": "炎症是具有血管系统的活体组织对损伤因子的反应",
-            "confidence": 0.92,
         },
         {
             "name": "细胞损伤",
@@ -53,7 +52,6 @@ FAKE_LLM_RESPONSE = {
             "category": "核心概念",
             "relations": [],
             "evidence": "细胞损伤是病理学的基本概念",
-            "confidence": 0.88,
         },
     ]
 }
@@ -110,7 +108,7 @@ class TestConceptWriter:
         assert page.frontmatter["id"] == "book_01_node_001"
         assert page.frontmatter["category"] == "核心概念"
         assert page.frontmatter["textbook_id"] == "book_01"
-        assert page.frontmatter["confidence"] == 0.92
+        assert "confidence" not in page.frontmatter
         assert "inflammation" in page.frontmatter["aliases"]
 
     @pytest.mark.asyncio

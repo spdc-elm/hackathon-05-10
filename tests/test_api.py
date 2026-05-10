@@ -136,7 +136,7 @@ class TestGraph:
         vault.ensure_structure()
         vault.write_page(
             "concepts/炎症.md",
-            {"id": "n1", "category": "核心概念", "confidence": 0.9},
+            {"id": "n1", "category": "核心概念"},
             "# 炎症\n\n防御反应\n\n## 原文证据\n\n> 原文\n",
         )
 
