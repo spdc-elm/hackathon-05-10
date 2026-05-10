@@ -1,25 +1,16 @@
-import React, { useState } from "react";
+import React from "react";
 import { createRoot } from "react-dom/client";
-import { UploadPage } from "./components/UploadPage";
-import { GraphPage } from "./components/GraphPage";
+import { Workspace } from "./components/Workspace";
 import { GraphContextProvider } from "./context/GraphContext";
 import "./styles.css";
 import "./graph.css";
 
-type View = "upload" | "graph";
-
 function App() {
-  const [view, setView] = useState<View>("upload");
-
-  if (view === "graph") {
-    return (
-      <GraphContextProvider>
-        <GraphPage onBack={() => setView("upload")} />
-      </GraphContextProvider>
-    );
-  }
-
-  return <UploadPage onViewGraph={() => setView("graph")} />;
+  return (
+    <GraphContextProvider>
+      <Workspace />
+    </GraphContextProvider>
+  );
 }
 
 createRoot(document.getElementById("root")!).render(

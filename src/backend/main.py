@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
@@ -54,10 +55,6 @@ def get_graph_builder(vault: VaultService = Depends(get_vault_service)) -> Graph
     return GraphBuilder(vault)
 
 
-def get_concept_writer(vault: VaultService = Depends(get_vault_service)) -> ConceptWriter:
-    return ConceptWriter(vault)
-
-
 # --- Health ---
 
 
@@ -69,38 +66,51 @@ def health() -> dict[str, str]:
 # --- Document Upload & Management ---
 
 
-@app.post("/api/parse/upload")
-async def parse_upload(
-    file: UploadFile,
-    repo: RuntimeRepository = Depends(get_runtime_repository),
-    vault: VaultService = Depends(get_vault_service),
-) -> dict[str, Any]:
-    """Upload and parse, returning the full ParsedDocument (for upload page preview)."""
-    document, _meta = await _parse_and_register_upload(file, repo)
-    writer = ConceptWriter(vault)
-    writer.write_textbook_chapters(document)
-    return document.to_dict()
-
-
 @app.post("/api/documents/upload")
 async def upload_document(
     file: UploadFile,
+    background_tasks: BackgroundTasks,
     repo: RuntimeRepository = Depends(get_runtime_repository),
     vault: VaultService = Depends(get_vault_service),
 ) -> dict[str, Any]:
-    """Upload, parse, register in repo, and write chapters to vault."""
+    """Upload, parse, write chapters to vault, and trigger async extraction."""
     document, meta = await _parse_and_register_upload(file, repo)
 
     writer = ConceptWriter(vault)
     writer.write_textbook_chapters(document)
 
+    # Fire extraction in background
+    repo.update_document_meta(document.textbook_id, {"extraction_status": "running"})
+    background_tasks.add_task(_run_extraction_background, document, repo, vault)
+
     return {
         "document_id": document.textbook_id,
         "status": "parsed",
+        "title": document.title,
+        "filename": document.filename,
+        "format": document.format,
         "chapter_count": len(document.chapters),
         "total_chars": document.total_chars,
-        "vault_paths": [f"textbooks/{document.title}"],
+        "extraction_status": "running",
     }
+
+
+@app.post("/api/parse/upload")
+async def parse_upload(
+    file: UploadFile,
+    background_tasks: BackgroundTasks,
+    repo: RuntimeRepository = Depends(get_runtime_repository),
+    vault: VaultService = Depends(get_vault_service),
+) -> dict[str, Any]:
+    """Upload and parse, returning the full ParsedDocument. Also triggers extraction."""
+    document, _meta = await _parse_and_register_upload(file, repo)
+    writer = ConceptWriter(vault)
+    writer.write_textbook_chapters(document)
+
+    repo.update_document_meta(document.textbook_id, {"extraction_status": "running"})
+    background_tasks.add_task(_run_extraction_background, document, repo, vault)
+
+    return document.to_dict()
 
 
 @app.get("/api/documents")
@@ -116,50 +126,53 @@ def get_document(
     repo: RuntimeRepository = Depends(get_runtime_repository),
 ) -> dict[str, Any]:
     document = _load_document_or_404(repo, document_id)
+    meta = _get_meta_safe(repo, document_id)
     return {
         "document_id": document_id,
         "title": document.title,
+        "filename": document.filename,
         "format": document.format,
         "total_chars": document.total_chars,
+        "extraction_status": meta.get("extraction_status", "none"),
+        "concept_count": meta.get("concept_count", 0),
         "chapters": [_chapter_summary(ch) for ch in document.chapters],
     }
 
 
-# --- Extraction (LLM → vault concept files) ---
+# --- Extraction ---
 
 
 @app.post("/api/extraction/run")
 async def run_extraction(
     request: dict[str, Any],
+    background_tasks: BackgroundTasks,
     repo: RuntimeRepository = Depends(get_runtime_repository),
     vault: VaultService = Depends(get_vault_service),
 ) -> dict[str, Any]:
-    """Run LLM extraction for a document, writing concept MD files to vault."""
+    """Manually trigger extraction for a document."""
     document_id = str(request.get("document_id") or "").strip()
     if not document_id:
         raise HTTPException(status_code=400, detail="document_id is required.")
 
     document = _load_document_or_404(repo, document_id)
-    writer = ConceptWriter(vault)
+    repo.update_document_meta(document_id, {"extraction_status": "running"})
+    background_tasks.add_task(_run_extraction_background, document, repo, vault)
 
-    try:
-        paths = await writer.extract_and_write(document)
-    except LLMConfigurationError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except LLMError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"document_id": document_id, "status": "running"}
 
-    repo.update_document_meta(document_id, {
-        "extraction_status": "ready",
-        "concept_count": len(paths),
-        "updated_at": _now_iso(),
-    })
 
+@app.get("/api/extraction/status/{document_id}")
+def extraction_status(
+    document_id: str,
+    repo: RuntimeRepository = Depends(get_runtime_repository),
+) -> dict[str, Any]:
+    """Poll extraction progress for a document."""
+    meta = _get_meta_safe(repo, document_id)
     return {
         "document_id": document_id,
-        "status": "ready",
-        "concepts_written": len(paths),
-        "vault_paths": paths,
+        "extraction_status": meta.get("extraction_status", "none"),
+        "concept_count": meta.get("concept_count", 0),
+        "error": meta.get("extraction_error"),
     }
 
 
@@ -224,6 +237,37 @@ def search_graph(
     return {"matches": matches}
 
 
+# --- Background tasks ---
+
+
+async def _run_extraction_background(
+    document: ParsedDocument,
+    repo: RuntimeRepository,
+    vault: VaultService,
+) -> None:
+    """Run LLM extraction in background, updating meta on completion."""
+    writer = ConceptWriter(vault)
+    try:
+        paths = await writer.extract_and_write(document)
+        repo.update_document_meta(document.textbook_id, {
+            "extraction_status": "ready",
+            "concept_count": len(paths),
+            "updated_at": _now_iso(),
+        })
+    except (LLMConfigurationError, LLMError) as exc:
+        repo.update_document_meta(document.textbook_id, {
+            "extraction_status": "error",
+            "extraction_error": str(exc),
+            "updated_at": _now_iso(),
+        })
+    except Exception as exc:
+        repo.update_document_meta(document.textbook_id, {
+            "extraction_status": "error",
+            "extraction_error": f"Unexpected: {exc}",
+            "updated_at": _now_iso(),
+        })
+
+
 # --- Internal helpers ---
 
 
@@ -286,6 +330,13 @@ def _load_document_or_404(repo: RuntimeRepository, document_id: str) -> ParsedDo
         return repo.load_document(document_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Document not found.") from exc
+
+
+def _get_meta_safe(repo: RuntimeRepository, document_id: str) -> dict[str, Any]:
+    try:
+        return repo.get_document_meta(document_id)
+    except FileNotFoundError:
+        return {}
 
 
 def _chapter_summary(chapter: ParsedChapter) -> dict[str, Any]:

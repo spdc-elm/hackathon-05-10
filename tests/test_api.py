@@ -166,3 +166,25 @@ class TestGraph:
     def test_search_empty_query(self, client: TestClient) -> None:
         resp = client.get("/api/graph/search", params={"q": ""})
         assert resp.status_code == 400
+
+
+class TestExtractionStatus:
+    def test_upload_triggers_extraction(self, client: TestClient) -> None:
+        content = "# Test\n\nContent"
+        resp = client.post(
+            "/api/documents/upload",
+            files={"file": ("test.md", io.BytesIO(content.encode()), "text/markdown")},
+        )
+        data = resp.json()
+        assert data["extraction_status"] == "running"
+        doc_id = data["document_id"]
+
+        status_resp = client.get(f"/api/extraction/status/{doc_id}")
+        assert status_resp.status_code == 200
+        # Status may be running or error (no LLM configured in test)
+        assert status_resp.json()["extraction_status"] in ("running", "error", "ready")
+
+    def test_extraction_status_unknown_doc(self, client: TestClient) -> None:
+        resp = client.get("/api/extraction/status/nonexistent")
+        assert resp.status_code == 200
+        assert resp.json()["extraction_status"] == "none"
