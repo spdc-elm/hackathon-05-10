@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, DragEvent } from "react";
-import { uploadDocument, listDocuments, getExtractionStatus, type DocumentMeta } from "../api/client";
+import { uploadDocument, listDocuments, getExtractionStatus, deleteDocument, type DocumentMeta } from "../api/client";
 import { useGraphContext } from "../context/GraphContext";
 import { GraphCanvas } from "./GraphCanvas";
 import { GraphLegend } from "./GraphLegend";
@@ -95,6 +95,17 @@ export function Workspace() {
     Array.from(files).forEach(handleUpload);
   }
 
+  async function handleDelete(docId: string) {
+    try {
+      await deleteDocument(docId);
+      if (selectedDocId === docId) setSelectedDocId(null);
+      await refreshDocuments();
+      loadGraph();
+    } catch (e) {
+      console.error("Delete failed:", e);
+    }
+  }
+
   const selectedDoc = documents.find((d) => d.document_id === selectedDocId) ?? null;
 
   return (
@@ -132,18 +143,25 @@ export function Workspace() {
           )}
           {uploading && <div className="ws-empty">Uploading...</div>}
           {documents.map((doc) => (
-            <button
+            <div
               key={doc.document_id}
               className={`ws-doc-item ${doc.document_id === selectedDocId ? "selected" : ""}`}
               onClick={() => setSelectedDocId(doc.document_id)}
-              type="button"
             >
               <span className="ws-doc-title">{doc.title || doc.filename}</span>
               <span className="ws-doc-meta">
                 {doc.format} &middot; {doc.chapter_count} ch
                 <ExtractionBadge status={doc.extraction_status} />
+                <button
+                  className="ws-delete-btn"
+                  type="button"
+                  title="Delete"
+                  onClick={(e) => { e.stopPropagation(); handleDelete(doc.document_id); }}
+                >
+                  &times;
+                </button>
               </span>
-            </button>
+            </div>
           ))}
         </div>
 

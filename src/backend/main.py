@@ -139,6 +139,46 @@ def get_document(
     }
 
 
+@app.delete("/api/documents/{document_id}")
+def delete_document(
+    document_id: str,
+    repo: RuntimeRepository = Depends(get_runtime_repository),
+    vault: VaultService = Depends(get_vault_service),
+) -> dict[str, Any]:
+    """Delete a document and its associated vault files."""
+    meta = _get_meta_safe(repo, document_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    # Remove vault textbook files
+    title = meta.get("title", "")
+    if title:
+        safe_title = title.replace("/", "_").replace("\\", "_")
+        textbook_dir = Path(vault.root) / "textbooks" / safe_title
+        if textbook_dir.exists():
+            import shutil
+            shutil.rmtree(textbook_dir)
+
+    # Remove concept files linked to this document
+    concepts_dir = Path(vault.root) / "concepts"
+    if concepts_dir.exists():
+        for md_file in list(concepts_dir.glob("*.md")):
+            try:
+                page = vault.read_page(f"concepts/{md_file.name}")
+                if page.frontmatter.get("textbook_id") == document_id:
+                    md_file.unlink()
+            except Exception:
+                continue
+
+    # Remove runtime document data
+    doc_dir = repo.documents_dir / document_id
+    if doc_dir.exists():
+        import shutil
+        shutil.rmtree(doc_dir)
+
+    return {"status": "deleted", "document_id": document_id}
+
+
 # --- Extraction ---
 
 

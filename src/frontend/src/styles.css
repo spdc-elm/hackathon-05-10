@@ -490,6 +490,32 @@ h2 {
   gap: 6px;
 }
 
+.ws-delete-btn {
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--quiet);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.ws-doc-item:hover .ws-delete-btn {
+  opacity: 1;
+}
+
+.ws-delete-btn:hover {
+  color: var(--danger);
+  background: rgba(224, 138, 106, 0.15);
+}
+
 .badge {
   font-size: 10px;
   padding: 1px 5px;

@@ -63,6 +63,10 @@ export async function getExtractionStatus(id: string): Promise<{
   return apiFetch(`/api/extraction/status/${id}`);
 }
 
+export async function deleteDocument(id: string): Promise<void> {
+  await apiFetch(`/api/documents/${id}`, { method: "DELETE" });
+}
+
 // --- Graph ---
 
 export async function fetchGraphView(): Promise<GraphView> {
