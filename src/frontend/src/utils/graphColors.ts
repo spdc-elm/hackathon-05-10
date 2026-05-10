@@ -17,7 +17,7 @@ const RELATION_COLORS: Record<string, string> = {
 };
 
 const SPECIAL_COLORS: Record<string, string> = {
-  merged: "#e0c16a",
+  merged: "#ff4d5e",
 };
 
 export function resolveGraphColor(colorKey: string): string {
